@@ -1,71 +1,48 @@
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
-use parking_lot::RwLock;
+use crate::orders::{InMemoryOrderRepository, OrderService};
+use crate::products::{InMemoryProductRepository, ProductService};
+use crate::tenants::{InMemoryTenantRepository, TenantService};
 
-use crate::models::{Order, Product, Tenant};
-
-#[derive(Debug, Default)]
+/// Application state containing all domain services
 pub struct AppState {
-    tenants: RwLock<HashMap<String, Tenant>>,
-    products: RwLock<HashMap<String, Product>>,
-    orders: RwLock<HashMap<String, Order>>,
+    pub tenant_service: Arc<TenantService>,
+    pub product_service: Arc<ProductService>,
+    pub order_service: Arc<OrderService>,
 }
 
 impl AppState {
     pub fn new() -> Arc<Self> {
-        Arc::new(Self::default())
-    }
+        let tenant_service = Arc::new(TenantService::new(Arc::new(
+            InMemoryTenantRepository::new(),
+        )));
+        let product_service = Arc::new(ProductService::new(Arc::new(
+            InMemoryProductRepository::new(),
+        )));
+        let order_service = Arc::new(OrderService::new(Arc::new(
+            InMemoryOrderRepository::new(),
+        )));
 
-    pub fn list_tenants(&self) -> Vec<Tenant> {
-        self.tenants.read().values().cloned().collect()
+        Arc::new(Self {
+            tenant_service,
+            product_service,
+            order_service,
+        })
     }
+}
 
-    pub fn get_tenant(&self, tenant_id: &str) -> Option<Tenant> {
-        self.tenants.read().get(tenant_id).cloned()
+impl Default for AppState {
+    fn default() -> Self {
+        Self::new().as_ref().clone()
     }
+}
 
-    pub fn create_tenant(&self, tenant: Tenant) -> bool {
-        if self.tenants.read().contains_key(&tenant.id) {
-            return false;
+impl Clone for AppState {
+    fn clone(&self) -> Self {
+        Self {
+            tenant_service: Arc::clone(&self.tenant_service),
+            product_service: Arc::clone(&self.product_service),
+            order_service: Arc::clone(&self.order_service),
         }
-
-        self.tenants.write().insert(tenant.id.clone(), tenant);
-        true
-    }
-
-    pub fn list_products(&self, tenant_id: &str) -> Vec<Product> {
-        self.products
-            .read()
-            .values()
-            .filter(|product| product.tenant_id == tenant_id)
-            .cloned()
-            .collect()
-    }
-
-    pub fn create_product(&self, product: Product) -> bool {
-        if self.products.read().contains_key(&product.id) {
-            return false;
-        }
-
-        self.products.write().insert(product.id.clone(), product);
-        true
-    }
-
-    pub fn list_orders(&self, tenant_id: &str) -> Vec<Order> {
-        self.orders
-            .read()
-            .values()
-            .filter(|order| order.tenant_id == tenant_id)
-            .cloned()
-            .collect()
-    }
-
-    pub fn create_order(&self, order: Order) -> bool {
-        if self.orders.read().contains_key(&order.id) {
-            return false;
-        }
-
-        self.orders.write().insert(order.id.clone(), order);
-        true
     }
 }

@@ -1,5 +1,8 @@
 pub mod app;
+pub mod config;
 pub mod error;
-pub mod handlers;
-pub mod models;
 pub mod state;
+
+pub mod orders;
+pub mod products;
+pub mod tenants;

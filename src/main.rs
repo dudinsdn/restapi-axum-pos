@@ -1,20 +1,20 @@
 use std::net::SocketAddr;
 
 use restapi_axum_pos::app::create_app;
+use restapi_axum_pos::config::Config;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
 async fn main() {
+    let config = Config::from_env();
+
     tracing_subscriber::registry()
-        .with(tracing_subscriber::EnvFilter::new(
-            std::env::var("RUST_LOG")
-                .unwrap_or_else(|_| "info,axum=debug".into()),
-        ))
+        .with(tracing_subscriber::EnvFilter::new(&config.rust_log))
         .with(tracing_subscriber::fmt::layer())
         .init();
 
     let app = create_app();
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    let addr = SocketAddr::from(([127, 0, 0, 1], config.port));
 
     tracing::info!("Listening on http://{addr}");
 
