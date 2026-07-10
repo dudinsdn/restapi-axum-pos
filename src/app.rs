@@ -1,40 +1,38 @@
-use axum::{Router, extract::DefaultBodyLimit, http::Method, routing::get};
 use std::sync::Arc;
+
+use axum::{Router, extract::DefaultBodyLimit, http::Method, routing::get};
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
-use crate::orders;
-use crate::products;
-use crate::state::AppState;
-use crate::tenants;
+use crate::{
+    health_check,
+    orders::{self, OrderRepository},
+    products::{self, ProductRepository},
+    state::AppState,
+    tenants::{self, TenantRepository},
+};
 
-/// Health check handler
-pub async fn health_check() -> axum::http::StatusCode {
-    axum::http::StatusCode::OK
-}
-
-/// Create application router with all routes
-pub fn create_app() -> Router {
-    let state = AppState::new();
-
+pub fn create_app<TR, PR, OR>(state: Arc<AppState<TR, PR, OR>>) -> Router
+where
+    TR: TenantRepository,
+    PR: ProductRepository,
+    OR: OrderRepository,
+{
     Router::new()
         .route("/health", get(health_check))
         .route(
             "/tenants",
-            get(tenants::list_tenants)
-                .post(tenants::create_tenant)
-                .with_state(Arc::clone(&state.tenant_service)),
+            get(tenants::handler::list_tenants::<TR, PR, OR>)
+                .post(tenants::handler::create_tenant::<TR, PR, OR>),
         )
         .route(
             "/tenants/:tenant_id/products",
-            get(products::list_products)
-                .post(products::create_product)
-                .with_state(Arc::clone(&state.product_service)),
+            get(products::handler::list_products::<TR, PR, OR>)
+                .post(products::handler::create_product::<TR, PR, OR>),
         )
         .route(
             "/tenants/:tenant_id/orders",
-            get(orders::list_orders)
-                .post(orders::create_order)
-                .with_state(Arc::clone(&state.order_service)),
+            get(orders::handler::list_orders::<TR, PR, OR>)
+                .post(orders::handler::create_order::<TR, PR, OR>),
         )
         .layer(DefaultBodyLimit::max(1024 * 1024))
         .layer(
@@ -44,4 +42,5 @@ pub fn create_app() -> Router {
                 .allow_headers(tower_http::cors::Any),
         )
         .layer(TraceLayer::new_for_http())
+        .with_state(state)
 }

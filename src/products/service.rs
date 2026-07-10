@@ -1,69 +1,59 @@
-use std::sync::Arc;
-use uuid::Uuid;
+use crate::error::{AppError, Result};
+use crate::tenants::TenantRepository;
 
 use super::model::{CreateProductRequest, Product};
 use super::repository::ProductRepository;
-use crate::error::Result;
 
-/// Service layer for Product domain - contains business logic
-pub struct ProductService {
-    repository: Arc<dyn ProductRepository>,
+pub async fn list_products<PR, TR>(
+    products: &PR,
+    tenants: &TR,
+    tenant_id: &str,
+) -> Result<Vec<Product>>
+where
+    PR: ProductRepository,
+    TR: TenantRepository,
+{
+    ensure_tenant_exists(tenants, tenant_id).await?;
+    Ok(products.list_by_tenant(tenant_id).await)
 }
 
-impl ProductService {
-    pub fn new(repository: Arc<dyn ProductRepository>) -> Self {
-        Self { repository }
+pub async fn create_product<PR, TR>(
+    products: &PR,
+    tenants: &TR,
+    tenant_id: &str,
+    payload: CreateProductRequest,
+) -> Result<Product>
+where
+    PR: ProductRepository,
+    TR: TenantRepository,
+{
+    ensure_tenant_exists(tenants, tenant_id).await?;
+
+    let product = Product {
+        id: format!("prod-{}", uuid::Uuid::new_v4().simple()),
+        tenant_id: tenant_id.to_string(),
+        name: payload.name,
+        sku: payload.sku,
+        price: payload.price,
+        stock: payload.stock,
+    };
+
+    if !products.create(product.clone()).await {
+        return Err(AppError::Conflict(format!(
+            "sku '{}' already in use for this tenant",
+            product.sku
+        )));
     }
 
-    /// Create a new product with generated ID
-    pub async fn create_product(
-        &self,
-        tenant_id: String,
-        req: CreateProductRequest,
-    ) -> Result<Product> {
-        // Business validation: SKU uniqueness within tenant
-        if let Ok(_) = self.repository.get_by_sku(&tenant_id, &req.sku).await {
-            return Err(crate::error::AppError::Conflict(format!(
-                "SKU '{}' already exists for this tenant",
-                req.sku
-            )));
-        }
+    Ok(product)
+}
 
-        // Business validation: price and stock
-        if req.price < 0.0 {
-            return Err(crate::error::AppError::BadRequest(
-                "price must be non-negative".into(),
-            ));
-        }
-        if req.stock < 0 {
-            return Err(crate::error::AppError::BadRequest(
-                "stock must be non-negative".into(),
-            ));
-        }
-
-        let product = Product {
-            id: format!("prod-{}", Uuid::new_v4().simple()),
-            tenant_id,
-            name: req.name,
-            sku: req.sku,
-            price: req.price,
-            stock: req.stock,
-        };
-
-        self.repository.create(product.clone()).await?;
-        Ok(product)
+async fn ensure_tenant_exists<TR: TenantRepository>(
+    tenants: &TR,
+    tenant_id: &str,
+) -> Result<()> {
+    if tenants.get(tenant_id).await.is_none() {
+        return Err(AppError::NotFound("tenant not found".into()));
     }
-
-    /// Get a product by ID
-    pub async fn get_product(&self, id: &str) -> Result<Product> {
-        self.repository.get(id).await
-    }
-
-    /// List all products for a tenant
-    pub async fn list_products_by_tenant(
-        &self,
-        tenant_id: &str,
-    ) -> Result<Vec<Product>> {
-        self.repository.list_by_tenant(tenant_id).await
-    }
+    Ok(())
 }

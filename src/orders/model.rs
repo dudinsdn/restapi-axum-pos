@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrderItem {
     pub sku: String,
     pub name: String,
@@ -8,7 +8,7 @@ pub struct OrderItem {
     pub unit_price: f64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Order {
     pub id: String,
     pub tenant_id: String,
@@ -20,9 +20,7 @@ pub struct Order {
 #[derive(Debug, Deserialize)]
 pub struct CreateOrderItemRequest {
     pub sku: String,
-    pub name: String,
     pub quantity: i32,
-    pub unit_price: f64,
 }
 
 #[derive(Debug, Deserialize)]

@@ -1,73 +1,102 @@
-use async_trait::async_trait;
-use parking_lot::RwLock;
 use std::collections::HashMap;
+use std::future::Future;
+
+use parking_lot::RwLock;
 
 use super::model::Product;
-use crate::error::{AppError, Result};
 
-/// Repository trait for Product persistence
-#[async_trait]
-pub trait ProductRepository: Send + Sync {
-    async fn create(&self, product: Product) -> Result<()>;
-    async fn get(&self, id: &str) -> Result<Product>;
-    async fn list_by_tenant(&self, tenant_id: &str) -> Result<Vec<Product>>;
-    async fn get_by_sku(&self, tenant_id: &str, sku: &str) -> Result<Product>;
+pub trait ProductRepository: Send + Sync + 'static {
+    fn create(&self, product: Product) -> impl Future<Output = bool> + Send;
+    fn list_by_tenant(
+        &self,
+        tenant_id: &str,
+    ) -> impl Future<Output = Vec<Product>> + Send;
+    /// Cari produk milik satu tenant berdasarkan SKU. Dipakai order untuk
+    /// mengambil nama & harga yang sebenarnya, bukan dari input client.
+    fn get_by_sku(
+        &self,
+        tenant_id: &str,
+        sku: &str,
+    ) -> impl Future<Output = Option<Product>> + Send;
+    /// Kurangi stock atomically. Return `false` kalau produk tidak ada
+    /// atau stock tidak cukup — tidak ada perubahan terjadi di kasus itu.
+    fn reserve_stock(
+        &self,
+        product_id: &str,
+        quantity: i32,
+    ) -> impl Future<Output = bool> + Send;
+    /// Kembalikan stock yang sudah di-reserve (dipakai untuk rollback kalau
+    /// item lain dalam order yang sama gagal).
+    fn release_stock(
+        &self,
+        product_id: &str,
+        quantity: i32,
+    ) -> impl Future<Output = ()> + Send;
 }
 
-/// In-memory implementation of ProductRepository
+#[derive(Debug, Default)]
 pub struct InMemoryProductRepository {
     data: RwLock<HashMap<String, Product>>,
 }
 
 impl InMemoryProductRepository {
     pub fn new() -> Self {
-        Self {
-            data: RwLock::new(HashMap::new()),
-        }
+        Self::default()
     }
 }
 
-impl Default for InMemoryProductRepository {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[async_trait]
 impl ProductRepository for InMemoryProductRepository {
-    async fn create(&self, product: Product) -> Result<()> {
+    async fn create(&self, product: Product) -> bool {
+        // Satu write-lock untuk cek id + sku (scoped per tenant) DAN insert
+        // sekaligus, supaya atomic — sama seperti perbaikan slug di tenant.
         let mut data = self.data.write();
-        if data.contains_key(&product.id) {
-            return Err(AppError::Conflict("product already exists".into()));
+
+        let sku_taken = data.values().any(|existing| {
+            existing.tenant_id == product.tenant_id
+                && existing.sku == product.sku
+        });
+
+        if sku_taken || data.contains_key(&product.id) {
+            return false;
         }
+
         data.insert(product.id.clone(), product);
-        Ok(())
+        true
     }
 
-    async fn get(&self, id: &str) -> Result<Product> {
-        self.data
-            .read()
-            .get(id)
-            .cloned()
-            .ok_or_else(|| AppError::NotFound("product not found".into()))
-    }
-
-    async fn list_by_tenant(&self, tenant_id: &str) -> Result<Vec<Product>> {
-        Ok(self
-            .data
-            .read()
-            .values()
-            .filter(|p| p.tenant_id == tenant_id)
-            .cloned()
-            .collect())
-    }
-
-    async fn get_by_sku(&self, tenant_id: &str, sku: &str) -> Result<Product> {
+    async fn list_by_tenant(&self, tenant_id: &str) -> Vec<Product> {
         self.data
             .read()
             .values()
-            .find(|p| p.tenant_id == tenant_id && p.sku == sku)
+            .filter(|product| product.tenant_id == tenant_id)
             .cloned()
-            .ok_or_else(|| AppError::NotFound("product not found".into()))
+            .collect()
+    }
+
+    async fn get_by_sku(&self, tenant_id: &str, sku: &str) -> Option<Product> {
+        self.data
+            .read()
+            .values()
+            .find(|product| {
+                product.tenant_id == tenant_id && product.sku == sku
+            })
+            .cloned()
+    }
+
+    async fn reserve_stock(&self, product_id: &str, quantity: i32) -> bool {
+        let mut data = self.data.write();
+        if let Some(product) = data.get_mut(product_id) {
+            if product.stock >= quantity {
+                product.stock -= quantity;
+                return true;
+            }
+        }
+        false
+    }
+
+    async fn release_stock(&self, product_id: &str, quantity: i32) {
+        if let Some(product) = self.data.write().get_mut(product_id) {
+            product.stock += quantity;
+        }
     }
 }

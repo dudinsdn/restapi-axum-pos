@@ -1,48 +1,33 @@
 use std::sync::Arc;
 
-use crate::orders::{InMemoryOrderRepository, OrderService};
-use crate::products::{InMemoryProductRepository, ProductService};
-use crate::tenants::{InMemoryTenantRepository, TenantService};
+use crate::orders::OrderRepository;
+use crate::products::ProductRepository;
+use crate::tenants::TenantRepository;
 
-/// Application state containing all domain services
-pub struct AppState {
-    pub tenant_service: Arc<TenantService>,
-    pub product_service: Arc<ProductService>,
-    pub order_service: Arc<OrderService>,
+/// State aplikasi, generic atas tipe repository tiap domain.
+///
+/// Static dispatch (bukan `Arc<dyn Trait>`) supaya tidak ada overhead
+/// dynamic dispatch / boxing future — semua di-monomorphize saat compile.
+/// Kalau nanti ganti backend (mis. Postgres), cukup buat impl baru dari
+/// trait yang sama dan ganti tipe konkret di `main.rs`, tanpa menyentuh
+/// handler atau service.
+pub struct AppState<TR, PR, OR> {
+    pub tenants: TR,
+    pub products: PR,
+    pub orders: OR,
 }
 
-impl AppState {
-    pub fn new() -> Arc<Self> {
-        let tenant_service = Arc::new(TenantService::new(Arc::new(
-            InMemoryTenantRepository::new(),
-        )));
-        let product_service = Arc::new(ProductService::new(Arc::new(
-            InMemoryProductRepository::new(),
-        )));
-        let order_service = Arc::new(OrderService::new(Arc::new(
-            InMemoryOrderRepository::new(),
-        )));
-
+impl<TR, PR, OR> AppState<TR, PR, OR>
+where
+    TR: TenantRepository,
+    PR: ProductRepository,
+    OR: OrderRepository,
+{
+    pub fn new(tenants: TR, products: PR, orders: OR) -> Arc<Self> {
         Arc::new(Self {
-            tenant_service,
-            product_service,
-            order_service,
+            tenants,
+            products,
+            orders,
         })
-    }
-}
-
-impl Default for AppState {
-    fn default() -> Self {
-        Self::new().as_ref().clone()
-    }
-}
-
-impl Clone for AppState {
-    fn clone(&self) -> Self {
-        Self {
-            tenant_service: Arc::clone(&self.tenant_service),
-            product_service: Arc::clone(&self.product_service),
-            order_service: Arc::clone(&self.order_service),
-        }
     }
 }
