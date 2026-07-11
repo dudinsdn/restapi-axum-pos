@@ -32,8 +32,16 @@ where
             axum::routing::post(users::handler::login::<TR, PR, OR, UR>),
         )
         .route(
+            "/auth/logout",
+            axum::routing::post(users::handler::logout::<TR, PR, OR, UR>),
+        )
+        .route(
             "/tenants/me",
             get(tenants::handler::get_me::<TR, PR, OR, UR>),
+        )
+        .route(
+            "/tenants/me/users",
+            axum::routing::post(users::handler::invite_staff::<TR, PR, OR, UR>),
         )
         .route(
             "/tenants/:tenant_id/products",

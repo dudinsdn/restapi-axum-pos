@@ -20,6 +20,9 @@ pub struct AuthUser {
     pub user_id: String,
     pub tenant_id: String,
     pub role: Role,
+    /// `jti` token ini — dipakai handler `/auth/logout` untuk revoke
+    /// token yang sedang dipakai (bukan semua token milik user).
+    pub token_id: String,
 }
 
 #[async_trait::async_trait]
@@ -51,10 +54,17 @@ where
 
         let claims = decode_token(token, &state.jwt_secret)?;
 
+        if state.revoked_tokens.is_revoked(&claims.jti) {
+            return Err(AppError::Unauthorized(
+                "token has been revoked".into(),
+            ));
+        }
+
         Ok(AuthUser {
             user_id: claims.sub,
             tenant_id: claims.tenant_id,
             role: claims.role,
+            token_id: claims.jti,
         })
     }
 }

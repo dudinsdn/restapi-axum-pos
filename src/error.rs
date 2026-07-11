@@ -8,6 +8,7 @@ pub enum AppError {
     BadRequest(String),
     Unauthorized(String),
     Forbidden(String),
+    TooManyRequests(String),
 }
 
 impl AppError {
@@ -18,6 +19,7 @@ impl AppError {
             Self::BadRequest(_) => StatusCode::BAD_REQUEST,
             Self::Unauthorized(_) => StatusCode::UNAUTHORIZED,
             Self::Forbidden(_) => StatusCode::FORBIDDEN,
+            Self::TooManyRequests(_) => StatusCode::TOO_MANY_REQUESTS,
         }
     }
 }
@@ -40,6 +42,7 @@ impl std::fmt::Display for AppError {
             Self::BadRequest(message) => write!(f, "{message}"),
             Self::Unauthorized(message) => write!(f, "{message}"),
             Self::Forbidden(message) => write!(f, "{message}"),
+            Self::TooManyRequests(message) => write!(f, "{message}"),
         }
     }
 }

@@ -35,6 +35,15 @@ pub struct LoginRequest {
     pub password: String,
 }
 
+/// Owner mengundang staff baru ke tenant-nya sendiri. `tenant_id` TIDAK
+/// diterima dari body — selalu diambil dari tenant milik pemanggil
+/// (`AuthUser`), supaya owner tidak bisa iseng invite staff ke tenant lain.
+#[derive(Debug, Deserialize)]
+pub struct InviteStaffRequest {
+    pub email: String,
+    pub password: String,
+}
+
 #[derive(Debug, Serialize)]
 pub struct PublicUser {
     pub id: String,

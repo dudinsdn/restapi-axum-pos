@@ -16,6 +16,10 @@ pub struct Claims {
     pub sub: String, // user id
     pub tenant_id: String,
     pub role: Role,
+    /// ID unik per token (bukan per user) — dipakai untuk revoke token
+    /// spesifik ini saat logout, tanpa mempengaruhi token lain milik user
+    /// yang sama (mis. kalau dia login dari 2 device berbeda).
+    pub jti: String,
     pub exp: usize,
 }
 
@@ -33,6 +37,7 @@ pub fn issue_token(user: &User, secret: &str) -> Result<String> {
         sub: user.id.clone(),
         tenant_id: user.tenant_id.clone(),
         role: user.role,
+        jti: uuid::Uuid::new_v4().to_string(),
         exp,
     };
 

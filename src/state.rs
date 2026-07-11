@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::orders::OrderRepository;
 use crate::products::ProductRepository;
 use crate::tenants::TenantRepository;
-use crate::users::UserRepository;
+use crate::users::{LoginRateLimiter, TokenRevocationList, UserRepository};
 
 /// State aplikasi, generic atas tipe repository tiap domain.
 ///
@@ -18,6 +18,8 @@ pub struct AppState<TR, PR, OR, UR> {
     pub orders: OR,
     pub users: UR,
     pub jwt_secret: String,
+    pub login_rate_limiter: Arc<LoginRateLimiter>,
+    pub revoked_tokens: Arc<TokenRevocationList>,
 }
 
 impl<TR, PR, OR, UR> AppState<TR, PR, OR, UR>
@@ -40,6 +42,8 @@ where
             orders,
             users,
             jwt_secret,
+            login_rate_limiter: Arc::new(LoginRateLimiter::new()),
+            revoked_tokens: Arc::new(TokenRevocationList::new()),
         })
     }
 }

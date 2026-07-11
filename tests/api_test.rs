@@ -280,6 +280,144 @@ async fn order_uses_real_product_price_and_reduces_stock() {
 }
 
 #[tokio::test]
+async fn login_is_rate_limited_after_too_many_failures() {
+    let app = test_app();
+    register(&app, "toko-budi", "budi@example.com").await;
+
+    for _ in 0..5 {
+        let payload = serde_json::json!({ "email": "budi@example.com", "password": "salah-terus" });
+        let response = app
+            .clone()
+            .oneshot(json_request("POST", "/auth/login", None, payload))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    // Percobaan ke-6, walau passwordnya BENAR, harus tetap ditolak karena
+    // sudah melebihi batas percobaan gagal.
+    let payload = serde_json::json!({ "email": "budi@example.com", "password": "password123" });
+    let response = app
+        .oneshot(json_request("POST", "/auth/login", None, payload))
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+}
+
+#[tokio::test]
+async fn owner_can_invite_staff_and_staff_can_login() {
+    let app = test_app();
+    let (owner_token, _tenant_id) =
+        register(&app, "toko-budi", "owner@example.com").await;
+
+    let payload = serde_json::json!({ "email": "staff@example.com", "password": "password123" });
+    let response = app
+        .clone()
+        .oneshot(json_request(
+            "POST",
+            "/tenants/me/users",
+            Some(&owner_token),
+            payload,
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let created = body_json(response).await;
+    assert_eq!(created["role"], "staff");
+
+    // Staff yang baru diundang harus bisa login sendiri.
+    let login_payload = serde_json::json!({ "email": "staff@example.com", "password": "password123" });
+    let login_response = app
+        .oneshot(json_request("POST", "/auth/login", None, login_payload))
+        .await
+        .unwrap();
+    assert_eq!(login_response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn staff_cannot_invite_other_staff() {
+    let app = test_app();
+    let (owner_token, _tenant_id) =
+        register(&app, "toko-budi", "owner@example.com").await;
+
+    let invite_payload = serde_json::json!({ "email": "staff@example.com", "password": "password123" });
+    app.clone()
+        .oneshot(json_request(
+            "POST",
+            "/tenants/me/users",
+            Some(&owner_token),
+            invite_payload,
+        ))
+        .await
+        .unwrap();
+
+    let login_payload = serde_json::json!({ "email": "staff@example.com", "password": "password123" });
+    let login_response = app
+        .clone()
+        .oneshot(json_request("POST", "/auth/login", None, login_payload))
+        .await
+        .unwrap();
+    let staff_token = body_json(login_response).await["token"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let another_invite = serde_json::json!({ "email": "staff2@example.com", "password": "password123" });
+    let response = app
+        .oneshot(json_request(
+            "POST",
+            "/tenants/me/users",
+            Some(&staff_token),
+            another_invite,
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn logout_revokes_the_token() {
+    let app = test_app();
+    let (token, tenant_id) =
+        register(&app, "toko-budi", "budi@example.com").await;
+
+    // Token masih valid sebelum logout.
+    let before = app
+        .clone()
+        .oneshot(get_request(
+            &format!("/tenants/{tenant_id}/products"),
+            Some(&token),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(before.status(), StatusCode::OK);
+
+    let logout_response = app
+        .clone()
+        .oneshot(json_request(
+            "POST",
+            "/auth/logout",
+            Some(&token),
+            serde_json::json!({}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(logout_response.status(), StatusCode::NO_CONTENT);
+
+    // Token yang sama, dipakai lagi setelah logout, harus ditolak.
+    let after = app
+        .oneshot(get_request(
+            &format!("/tenants/{tenant_id}/products"),
+            Some(&token),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(after.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
 async fn order_with_unknown_sku_returns_not_found() {
     let app = test_app();
     let (token, tenant_id) =
