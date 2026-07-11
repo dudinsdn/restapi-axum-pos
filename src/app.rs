@@ -44,12 +44,12 @@ where
             axum::routing::post(users::handler::invite_staff::<TR, PR, OR, UR>),
         )
         .route(
-            "/tenants/:tenant_id/products",
+            "/products",
             get(products::handler::list_products::<TR, PR, OR, UR>)
                 .post(products::handler::create_product::<TR, PR, OR, UR>),
         )
         .route(
-            "/tenants/:tenant_id/orders",
+            "/orders",
             get(orders::handler::list_orders::<TR, PR, OR, UR>)
                 .post(orders::handler::create_order::<TR, PR, OR, UR>),
         )

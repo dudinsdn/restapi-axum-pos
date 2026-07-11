@@ -75,9 +75,10 @@ async fn register(app: &Router, slug: &str, email: &str) -> (String, String) {
     (token, tenant_id)
 }
 
+/// Helper: bikin product buat tenant pemilik `token` — tidak ada tenant_id
+/// yang dikirim, murni ditentukan dari token.
 async fn create_product(
     app: &Router,
-    tenant_id: &str,
     token: &str,
     sku: &str,
     price: f64,
@@ -91,12 +92,7 @@ async fn create_product(
     });
     let response = app
         .clone()
-        .oneshot(json_request(
-            "POST",
-            &format!("/tenants/{tenant_id}/products"),
-            Some(token),
-            payload,
-        ))
+        .oneshot(json_request("POST", "/products", Some(token), payload))
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::CREATED);
@@ -186,41 +182,40 @@ async fn login_with_wrong_password_is_unauthorized() {
 #[tokio::test]
 async fn products_endpoint_requires_auth() {
     let app = test_app();
-    let (_token, tenant_id) =
-        register(&app, "toko-budi", "budi@example.com").await;
+    register(&app, "toko-budi", "budi@example.com").await;
 
-    let response = app
-        .oneshot(get_request(&format!("/tenants/{tenant_id}/products"), None))
-        .await
-        .unwrap();
-
+    let response = app.oneshot(get_request("/products", None)).await.unwrap();
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 }
 
 #[tokio::test]
-async fn cannot_access_other_tenants_data() {
+async fn tenant_data_is_isolated_by_token_not_by_request() {
     let app = test_app();
     let (token_a, _tenant_a) = register(&app, "toko-a", "a@example.com").await;
-    let (_token_b, tenant_b) = register(&app, "toko-b", "b@example.com").await;
+    let (token_b, _tenant_b) = register(&app, "toko-b", "b@example.com").await;
 
-    // Token milik tenant A dipakai buat akses data tenant B -> harus ditolak.
+    create_product(&app, &token_a, "SKU-A", 10_000.0, 5).await;
+
+    // Tidak ada tenant_id yang bisa "ditebak" atau "dipalsukan" dari sisi
+    // client — endpoint-nya sama persis (`/products`), tapi token tenant B
+    // TIDAK PERNAH bisa melihat product tenant A karena scoping-nya
+    // sepenuhnya berasal dari token, bukan dari request.
     let response = app
-        .oneshot(get_request(
-            &format!("/tenants/{tenant_b}/products"),
-            Some(&token_a),
-        ))
+        .oneshot(get_request("/products", Some(&token_b)))
         .await
         .unwrap();
 
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert_eq!(response.status(), StatusCode::OK);
+    let products = body_json(response).await;
+    assert_eq!(products.as_array().unwrap().len(), 0);
 }
 
 #[tokio::test]
 async fn duplicate_sku_is_rejected() {
     let app = test_app();
-    let (token, tenant_id) =
+    let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
-    create_product(&app, &tenant_id, &token, "SKU-001", 10_000.0, 5).await;
+    create_product(&app, &token, "SKU-001", 10_000.0, 5).await;
 
     let payload = serde_json::json!({
         "name": "Nama Berbeda",
@@ -229,12 +224,7 @@ async fn duplicate_sku_is_rejected() {
         "stock": 3
     });
     let response = app
-        .oneshot(json_request(
-            "POST",
-            &format!("/tenants/{tenant_id}/products"),
-            Some(&token),
-            payload,
-        ))
+        .oneshot(json_request("POST", "/products", Some(&token), payload))
         .await
         .unwrap();
 
@@ -244,9 +234,9 @@ async fn duplicate_sku_is_rejected() {
 #[tokio::test]
 async fn order_uses_real_product_price_and_reduces_stock() {
     let app = test_app();
-    let (token, tenant_id) =
+    let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
-    create_product(&app, &tenant_id, &token, "SKU-001", 15_000.0, 10).await;
+    create_product(&app, &token, "SKU-001", 15_000.0, 10).await;
 
     let payload = serde_json::json!({
         "customer_name": "Budi",
@@ -254,12 +244,7 @@ async fn order_uses_real_product_price_and_reduces_stock() {
     });
     let response = app
         .clone()
-        .oneshot(json_request(
-            "POST",
-            &format!("/tenants/{tenant_id}/orders"),
-            Some(&token),
-            payload,
-        ))
+        .oneshot(json_request("POST", "/orders", Some(&token), payload))
         .await
         .unwrap();
 
@@ -269,14 +254,56 @@ async fn order_uses_real_product_price_and_reduces_stock() {
     assert_eq!(order["items"][0]["unit_price"], 15_000.0);
 
     let products_response = app
-        .oneshot(get_request(
-            &format!("/tenants/{tenant_id}/products"),
-            Some(&token),
-        ))
+        .oneshot(get_request("/products", Some(&token)))
         .await
         .unwrap();
     let products = body_json(products_response).await;
     assert_eq!(products[0]["stock"], 7);
+}
+
+#[tokio::test]
+async fn order_with_unknown_sku_returns_not_found() {
+    let app = test_app();
+    let (token, _tenant_id) =
+        register(&app, "toko-budi", "budi@example.com").await;
+
+    let payload = serde_json::json!({
+        "customer_name": "Budi",
+        "items": [{ "sku": "SKU-TIDAK-ADA", "quantity": 1 }]
+    });
+    let response = app
+        .oneshot(json_request("POST", "/orders", Some(&token), payload))
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn order_fails_when_stock_insufficient() {
+    let app = test_app();
+    let (token, _tenant_id) =
+        register(&app, "toko-budi", "budi@example.com").await;
+    create_product(&app, &token, "SKU-001", 15_000.0, 2).await;
+
+    let payload = serde_json::json!({
+        "customer_name": "Budi",
+        "items": [{ "sku": "SKU-001", "quantity": 5 }]
+    });
+    let response = app
+        .clone()
+        .oneshot(json_request("POST", "/orders", Some(&token), payload))
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+
+    let products_response = app
+        .oneshot(get_request("/products", Some(&token)))
+        .await
+        .unwrap();
+    let products = body_json(products_response).await;
+    assert_eq!(products[0]["stock"], 2);
 }
 
 #[tokio::test]
@@ -294,8 +321,6 @@ async fn login_is_rate_limited_after_too_many_failures() {
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
 
-    // Percobaan ke-6, walau passwordnya BENAR, harus tetap ditolak karena
-    // sudah melebihi batas percobaan gagal.
     let payload = serde_json::json!({ "email": "budi@example.com", "password": "password123" });
     let response = app
         .oneshot(json_request("POST", "/auth/login", None, payload))
@@ -326,7 +351,6 @@ async fn owner_can_invite_staff_and_staff_can_login() {
     let created = body_json(response).await;
     assert_eq!(created["role"], "staff");
 
-    // Staff yang baru diundang harus bisa login sendiri.
     let login_payload = serde_json::json!({ "email": "staff@example.com", "password": "password123" });
     let login_response = app
         .oneshot(json_request("POST", "/auth/login", None, login_payload))
@@ -380,16 +404,12 @@ async fn staff_cannot_invite_other_staff() {
 #[tokio::test]
 async fn logout_revokes_the_token() {
     let app = test_app();
-    let (token, tenant_id) =
+    let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
 
-    // Token masih valid sebelum logout.
     let before = app
         .clone()
-        .oneshot(get_request(
-            &format!("/tenants/{tenant_id}/products"),
-            Some(&token),
-        ))
+        .oneshot(get_request("/products", Some(&token)))
         .await
         .unwrap();
     assert_eq!(before.status(), StatusCode::OK);
@@ -406,71 +426,9 @@ async fn logout_revokes_the_token() {
         .unwrap();
     assert_eq!(logout_response.status(), StatusCode::NO_CONTENT);
 
-    // Token yang sama, dipakai lagi setelah logout, harus ditolak.
     let after = app
-        .oneshot(get_request(
-            &format!("/tenants/{tenant_id}/products"),
-            Some(&token),
-        ))
+        .oneshot(get_request("/products", Some(&token)))
         .await
         .unwrap();
     assert_eq!(after.status(), StatusCode::UNAUTHORIZED);
-}
-
-#[tokio::test]
-async fn order_with_unknown_sku_returns_not_found() {
-    let app = test_app();
-    let (token, tenant_id) =
-        register(&app, "toko-budi", "budi@example.com").await;
-
-    let payload = serde_json::json!({
-        "customer_name": "Budi",
-        "items": [{ "sku": "SKU-TIDAK-ADA", "quantity": 1 }]
-    });
-    let response = app
-        .oneshot(json_request(
-            "POST",
-            &format!("/tenants/{tenant_id}/orders"),
-            Some(&token),
-            payload,
-        ))
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), StatusCode::NOT_FOUND);
-}
-
-#[tokio::test]
-async fn order_fails_when_stock_insufficient() {
-    let app = test_app();
-    let (token, tenant_id) =
-        register(&app, "toko-budi", "budi@example.com").await;
-    create_product(&app, &tenant_id, &token, "SKU-001", 15_000.0, 2).await;
-
-    let payload = serde_json::json!({
-        "customer_name": "Budi",
-        "items": [{ "sku": "SKU-001", "quantity": 5 }]
-    });
-    let response = app
-        .clone()
-        .oneshot(json_request(
-            "POST",
-            &format!("/tenants/{tenant_id}/orders"),
-            Some(&token),
-            payload,
-        ))
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), StatusCode::CONFLICT);
-
-    let products_response = app
-        .oneshot(get_request(
-            &format!("/tenants/{tenant_id}/products"),
-            Some(&token),
-        ))
-        .await
-        .unwrap();
-    let products = body_json(products_response).await;
-    assert_eq!(products[0]["stock"], 2);
 }
