@@ -9,30 +9,41 @@ use crate::{
     products::{self, ProductRepository},
     state::AppState,
     tenants::{self, TenantRepository},
+    users::{self, UserRepository},
 };
 
-pub fn create_app<TR, PR, OR>(state: Arc<AppState<TR, PR, OR>>) -> Router
+pub fn create_app<TR, PR, OR, UR>(
+    state: Arc<AppState<TR, PR, OR, UR>>,
+) -> Router
 where
     TR: TenantRepository,
     PR: ProductRepository,
     OR: OrderRepository,
+    UR: UserRepository,
 {
     Router::new()
         .route("/health", get(health_check))
         .route(
-            "/tenants",
-            get(tenants::handler::list_tenants::<TR, PR, OR>)
-                .post(tenants::handler::create_tenant::<TR, PR, OR>),
+            "/auth/register",
+            axum::routing::post(users::handler::register::<TR, PR, OR, UR>),
+        )
+        .route(
+            "/auth/login",
+            axum::routing::post(users::handler::login::<TR, PR, OR, UR>),
+        )
+        .route(
+            "/tenants/me",
+            get(tenants::handler::get_me::<TR, PR, OR, UR>),
         )
         .route(
             "/tenants/:tenant_id/products",
-            get(products::handler::list_products::<TR, PR, OR>)
-                .post(products::handler::create_product::<TR, PR, OR>),
+            get(products::handler::list_products::<TR, PR, OR, UR>)
+                .post(products::handler::create_product::<TR, PR, OR, UR>),
         )
         .route(
             "/tenants/:tenant_id/orders",
-            get(orders::handler::list_orders::<TR, PR, OR>)
-                .post(orders::handler::create_order::<TR, PR, OR>),
+            get(orders::handler::list_orders::<TR, PR, OR, UR>)
+                .post(orders::handler::create_order::<TR, PR, OR, UR>),
         )
         .layer(DefaultBodyLimit::max(1024 * 1024))
         .layer(

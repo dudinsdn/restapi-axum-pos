@@ -6,6 +6,8 @@ pub enum AppError {
     NotFound(String),
     Conflict(String),
     BadRequest(String),
+    Unauthorized(String),
+    Forbidden(String),
 }
 
 impl AppError {
@@ -14,6 +16,8 @@ impl AppError {
             Self::NotFound(_) => StatusCode::NOT_FOUND,
             Self::Conflict(_) => StatusCode::CONFLICT,
             Self::BadRequest(_) => StatusCode::BAD_REQUEST,
+            Self::Unauthorized(_) => StatusCode::UNAUTHORIZED,
+            Self::Forbidden(_) => StatusCode::FORBIDDEN,
         }
     }
 }
@@ -34,6 +38,8 @@ impl std::fmt::Display for AppError {
             Self::NotFound(message) => write!(f, "{message}"),
             Self::Conflict(message) => write!(f, "{message}"),
             Self::BadRequest(message) => write!(f, "{message}"),
+            Self::Unauthorized(message) => write!(f, "{message}"),
+            Self::Forbidden(message) => write!(f, "{message}"),
         }
     }
 }

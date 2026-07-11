@@ -19,6 +19,9 @@ pub trait TenantRepository: Send + Sync + 'static {
     fn create(&self, tenant: Tenant) -> impl Future<Output = bool> + Send;
     fn get(&self, id: &str) -> impl Future<Output = Option<Tenant>> + Send;
     fn list(&self) -> impl Future<Output = Vec<Tenant>> + Send;
+    /// Dipakai untuk rollback kalau proses register gagal setelah tenant
+    /// terlanjur dibuat (mis. email sudah dipakai).
+    fn delete(&self, id: &str) -> impl Future<Output = ()> + Send;
 }
 
 #[derive(Debug, Default)]
@@ -56,5 +59,9 @@ impl TenantRepository for InMemoryTenantRepository {
 
     async fn list(&self) -> Vec<Tenant> {
         self.data.read().values().cloned().collect()
+    }
+
+    async fn delete(&self, id: &str) {
+        self.data.write().remove(id);
     }
 }

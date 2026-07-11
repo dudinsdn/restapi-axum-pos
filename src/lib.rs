@@ -6,6 +6,7 @@ pub mod state;
 pub mod orders;
 pub mod products;
 pub mod tenants;
+pub mod users;
 
 use axum::http::StatusCode;
 

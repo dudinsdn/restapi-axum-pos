@@ -1,29 +1,13 @@
 use crate::error::{AppError, Result};
 
-use super::model::{CreateTenantRequest, Tenant};
+use super::model::Tenant;
 use super::repository::TenantRepository;
 
-pub async fn list_tenants<R: TenantRepository>(repo: &R) -> Vec<Tenant> {
-    repo.list().await
-}
-
-pub async fn create_tenant<R: TenantRepository>(
+pub async fn get_tenant<R: TenantRepository>(
     repo: &R,
-    payload: CreateTenantRequest,
+    tenant_id: &str,
 ) -> Result<Tenant> {
-    let tenant = Tenant {
-        id: format!("tenant-{}", uuid::Uuid::new_v4().simple()),
-        name: payload.name,
-        slug: payload.slug,
-        address: payload.address,
-    };
-
-    if !repo.create(tenant.clone()).await {
-        return Err(AppError::Conflict(format!(
-            "slug '{}' already in use",
-            tenant.slug
-        )));
-    }
-
-    Ok(tenant)
+    repo.get(tenant_id)
+        .await
+        .ok_or_else(|| AppError::NotFound("tenant not found".into()))
 }

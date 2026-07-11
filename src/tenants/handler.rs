@@ -1,36 +1,30 @@
 use std::sync::Arc;
 
-use axum::{Json, extract::State, http::StatusCode};
+use axum::{Json, extract::State};
 
 use crate::error::Result;
 use crate::orders::OrderRepository;
 use crate::products::ProductRepository;
 use crate::state::AppState;
+use crate::users::{AuthUser, UserRepository};
 
-use super::model::{CreateTenantRequest, Tenant};
+use super::model::Tenant;
 use super::repository::TenantRepository;
 use super::service;
 
-pub async fn list_tenants<TR, PR, OR>(
-    State(state): State<Arc<AppState<TR, PR, OR>>>,
-) -> Result<Json<Vec<Tenant>>>
+/// Info tenant milik user yang sedang login. Tidak ada lagi endpoint
+/// "list semua tenant" — setiap user cuma boleh lihat tenant-nya sendiri.
+pub async fn get_me<TR, PR, OR, UR>(
+    auth_user: AuthUser,
+    State(state): State<Arc<AppState<TR, PR, OR, UR>>>,
+) -> Result<Json<Tenant>>
 where
     TR: TenantRepository,
     PR: ProductRepository,
     OR: OrderRepository,
+    UR: UserRepository,
 {
-    Ok(Json(service::list_tenants(&state.tenants).await))
-}
-
-pub async fn create_tenant<TR, PR, OR>(
-    State(state): State<Arc<AppState<TR, PR, OR>>>,
-    Json(payload): Json<CreateTenantRequest>,
-) -> Result<(StatusCode, Json<Tenant>)>
-where
-    TR: TenantRepository,
-    PR: ProductRepository,
-    OR: OrderRepository,
-{
-    let tenant = service::create_tenant(&state.tenants, payload).await?;
-    Ok((StatusCode::CREATED, Json(tenant)))
+    let tenant =
+        service::get_tenant(&state.tenants, &auth_user.tenant_id).await?;
+    Ok(Json(tenant))
 }

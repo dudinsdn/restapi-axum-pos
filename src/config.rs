@@ -1,11 +1,8 @@
 /// Konfigurasi aplikasi, dibaca dari environment variable.
-///
-/// Dipisah dari `state.rs` supaya port/log-level bisa diubah tanpa
-/// menyentuh apa pun yang berhubungan dengan storage.
 #[derive(Debug, Clone)]
 pub struct Config {
     pub port: u16,
-    pub log_filter: String,
+    pub jwt_secret: String,
 }
 
 impl Config {
@@ -15,9 +12,15 @@ impl Config {
             .and_then(|value| value.parse().ok())
             .unwrap_or(3000);
 
-        let log_filter = std::env::var("RUST_LOG")
-            .unwrap_or_else(|_| "info,axum=debug".into());
+        let jwt_secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| {
+            tracing::warn!(
+                "JWT_SECRET tidak di-set — pakai secret default yang HANYA aman untuk \
+                 development. WAJIB di-set lewat environment variable sebelum deploy ke \
+                 production, kalau tidak semua token bisa dipalsukan."
+            );
+            "dev-only-insecure-secret-change-me".to_string()
+        });
 
-        Self { port, log_filter }
+        Self { port, jwt_secret }
     }
 }

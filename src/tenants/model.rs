@@ -7,10 +7,3 @@ pub struct Tenant {
     pub slug: String,
     pub address: Option<String>,
 }
-
-#[derive(Debug, Deserialize)]
-pub struct CreateTenantRequest {
-    pub name: String,
-    pub slug: String,
-    pub address: Option<String>,
-}
