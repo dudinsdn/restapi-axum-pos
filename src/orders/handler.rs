@@ -1,6 +1,10 @@
 use std::sync::Arc;
 
-use axum::{Json, extract::State, http::StatusCode};
+use axum::{
+    Json,
+    extract::{Path, State},
+    http::StatusCode,
+};
 
 use crate::error::Result;
 use crate::products::ProductRepository;
@@ -53,4 +57,25 @@ where
     )
     .await?;
     Ok((StatusCode::CREATED, Json(order)))
+}
+
+pub async fn cancel_order<TR, PR, OR, UR>(
+    auth_user: AuthUser,
+    Path(order_id): Path<String>,
+    State(state): State<Arc<AppState<TR, PR, OR, UR>>>,
+) -> Result<StatusCode>
+where
+    TR: TenantRepository,
+    PR: ProductRepository,
+    OR: OrderRepository,
+    UR: UserRepository,
+{
+    service::cancel_order(
+        &state.orders,
+        &state.products,
+        &auth_user.tenant_id,
+        &order_id,
+    )
+    .await?;
+    Ok(StatusCode::NO_CONTENT)
 }

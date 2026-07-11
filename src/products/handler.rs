@@ -1,6 +1,10 @@
 use std::sync::Arc;
 
-use axum::{Json, extract::State, http::StatusCode};
+use axum::{
+    Json,
+    extract::{Path, State},
+    http::StatusCode,
+};
 
 use crate::error::Result;
 use crate::orders::OrderRepository;
@@ -8,7 +12,7 @@ use crate::state::AppState;
 use crate::tenants::TenantRepository;
 use crate::users::{AuthUser, UserRepository};
 
-use super::model::{CreateProductRequest, Product};
+use super::model::{CreateProductRequest, Product, UpdateProductRequest};
 use super::repository::ProductRepository;
 use super::service;
 
@@ -53,4 +57,42 @@ where
     )
     .await?;
     Ok((StatusCode::CREATED, Json(product)))
+}
+
+pub async fn update_product<TR, PR, OR, UR>(
+    auth_user: AuthUser,
+    Path(product_id): Path<String>,
+    State(state): State<Arc<AppState<TR, PR, OR, UR>>>,
+    Json(payload): Json<UpdateProductRequest>,
+) -> Result<Json<Product>>
+where
+    TR: TenantRepository,
+    PR: ProductRepository,
+    OR: OrderRepository,
+    UR: UserRepository,
+{
+    let product = service::update_product(
+        &state.products,
+        &auth_user.tenant_id,
+        &product_id,
+        payload,
+    )
+    .await?;
+    Ok(Json(product))
+}
+
+pub async fn delete_product<TR, PR, OR, UR>(
+    auth_user: AuthUser,
+    Path(product_id): Path<String>,
+    State(state): State<Arc<AppState<TR, PR, OR, UR>>>,
+) -> Result<StatusCode>
+where
+    TR: TenantRepository,
+    PR: ProductRepository,
+    OR: OrderRepository,
+    UR: UserRepository,
+{
+    service::delete_product(&state.products, &auth_user.tenant_id, &product_id)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }

@@ -49,9 +49,22 @@ where
                 .post(products::handler::create_product::<TR, PR, OR, UR>),
         )
         .route(
+            "/products/:product_id",
+            axum::routing::patch(
+                products::handler::update_product::<TR, PR, OR, UR>,
+            )
+            .delete(products::handler::delete_product::<TR, PR, OR, UR>),
+        )
+        .route(
             "/orders",
             get(orders::handler::list_orders::<TR, PR, OR, UR>)
                 .post(orders::handler::create_order::<TR, PR, OR, UR>),
+        )
+        .route(
+            "/orders/:order_id",
+            axum::routing::delete(
+                orders::handler::cancel_order::<TR, PR, OR, UR>,
+            ),
         )
         .layer(DefaultBodyLimit::max(1024 * 1024))
         .layer(

@@ -1,7 +1,7 @@
 use crate::error::{AppError, Result};
 use crate::tenants::TenantRepository;
 
-use super::model::{CreateProductRequest, Product};
+use super::model::{CreateProductRequest, Product, UpdateProductRequest};
 use super::repository::ProductRepository;
 
 pub async fn list_products<PR, TR>(
@@ -46,6 +46,55 @@ where
     }
 
     Ok(product)
+}
+
+pub async fn update_product<PR: ProductRepository>(
+    products: &PR,
+    tenant_id: &str,
+    product_id: &str,
+    payload: UpdateProductRequest,
+) -> Result<Product> {
+    let mut product =
+        fetch_owned_product(products, tenant_id, product_id).await?;
+
+    if let Some(name) = payload.name {
+        product.name = name;
+    }
+    if let Some(price) = payload.price {
+        product.price = price;
+    }
+    if let Some(stock) = payload.stock {
+        product.stock = stock;
+    }
+
+    products.update(product.clone()).await;
+    Ok(product)
+}
+
+pub async fn delete_product<PR: ProductRepository>(
+    products: &PR,
+    tenant_id: &str,
+    product_id: &str,
+) -> Result<()> {
+    let product = fetch_owned_product(products, tenant_id, product_id).await?;
+    products.delete(&product.id).await;
+    Ok(())
+}
+
+/// Ambil product by id DAN pastikan milik tenant yang meminta. Kalau
+/// product tidak ada ATAU milik tenant lain, sama-sama return `NotFound`
+/// (bukan `Forbidden`) — supaya tidak bocorkan ke client apakah id itu
+/// sebenarnya ada tapi kepunyaan tenant lain.
+async fn fetch_owned_product<PR: ProductRepository>(
+    products: &PR,
+    tenant_id: &str,
+    product_id: &str,
+) -> Result<Product> {
+    products
+        .get(product_id)
+        .await
+        .filter(|product| product.tenant_id == tenant_id)
+        .ok_or_else(|| AppError::NotFound("product not found".into()))
 }
 
 async fn ensure_tenant_exists<TR: TenantRepository>(

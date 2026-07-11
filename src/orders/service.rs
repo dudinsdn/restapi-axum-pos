@@ -116,6 +116,40 @@ async fn rollback<PR: ProductRepository>(
     }
 }
 
+/// Batalkan order: hapus dan kembalikan stock tiap item ke product
+/// masing-masing. Ini satu-satunya cara "mengubah" order — sengaja tidak
+/// ada endpoint untuk edit item/quantity order yang sudah dibuat, karena
+/// order adalah catatan historis (mirip nota transaksi), bukan draft yang
+/// pantas diedit bebas. Kalau pesanannya salah, batalkan lalu buat ulang.
+pub async fn cancel_order<OR, PR>(
+    orders: &OR,
+    products: &PR,
+    tenant_id: &str,
+    order_id: &str,
+) -> Result<()>
+where
+    OR: OrderRepository,
+    PR: ProductRepository,
+{
+    let order = orders
+        .get(order_id)
+        .await
+        .filter(|order| order.tenant_id == tenant_id)
+        .ok_or_else(|| AppError::NotFound("order not found".into()))?;
+
+    for item in &order.items {
+        // Kalau product-nya sudah kadung dihapus duluan, stock tidak perlu
+        // dikembalikan (tidak ada lagi tempat menyimpannya) — order tetap
+        // batal, reconciliation stock-nya cuma jadi no-op untuk item itu.
+        if let Some(product) = products.get_by_sku(tenant_id, &item.sku).await {
+            products.release_stock(&product.id, item.quantity).await;
+        }
+    }
+
+    orders.delete(order_id).await;
+    Ok(())
+}
+
 async fn ensure_tenant_exists<TR: TenantRepository>(
     tenants: &TR,
     tenant_id: &str,

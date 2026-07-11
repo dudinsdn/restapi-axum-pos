@@ -18,6 +18,16 @@ pub trait ProductRepository: Send + Sync + 'static {
         tenant_id: &str,
         sku: &str,
     ) -> impl Future<Output = Option<Product>> + Send;
+    /// Cari produk berdasarkan id-nya sendiri (lintas tenant) — pemanggil
+    /// WAJIB cek `product.tenant_id` sendiri sebelum dipakai, karena method
+    /// ini sengaja tidak scoped per tenant (dipakai lookup awal sebelum tahu
+    /// siapa pemiliknya).
+    fn get(&self, id: &str) -> impl Future<Output = Option<Product>> + Send;
+    /// Timpa product yang sudah ada. Return `false` kalau id-nya belum ada
+    /// sama sekali (harusnya tidak terjadi kalau dipanggil setelah `get`).
+    fn update(&self, product: Product) -> impl Future<Output = bool> + Send;
+    /// Hapus product. Return `false` kalau id-nya tidak ada.
+    fn delete(&self, id: &str) -> impl Future<Output = bool> + Send;
     /// Kurangi stock atomically. Return `false` kalau produk tidak ada
     /// atau stock tidak cukup — tidak ada perubahan terjadi di kasus itu.
     fn reserve_stock(
@@ -25,8 +35,8 @@ pub trait ProductRepository: Send + Sync + 'static {
         product_id: &str,
         quantity: i32,
     ) -> impl Future<Output = bool> + Send;
-    /// Kembalikan stock yang sudah di-reserve (dipakai untuk rollback kalau
-    /// item lain dalam order yang sama gagal).
+    /// Kembalikan stock yang sudah di-reserve (dipakai untuk rollback order
+    /// yang gagal, atau saat order dibatalkan).
     fn release_stock(
         &self,
         product_id: &str,
@@ -81,6 +91,23 @@ impl ProductRepository for InMemoryProductRepository {
                 product.tenant_id == tenant_id && product.sku == sku
             })
             .cloned()
+    }
+
+    async fn get(&self, id: &str) -> Option<Product> {
+        self.data.read().get(id).cloned()
+    }
+
+    async fn update(&self, product: Product) -> bool {
+        let mut data = self.data.write();
+        if !data.contains_key(&product.id) {
+            return false;
+        }
+        data.insert(product.id.clone(), product);
+        true
+    }
+
+    async fn delete(&self, id: &str) -> bool {
+        self.data.write().remove(id).is_some()
     }
 
     async fn reserve_stock(&self, product_id: &str, quantity: i32) -> bool {

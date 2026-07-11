@@ -76,14 +76,14 @@ async fn register(app: &Router, slug: &str, email: &str) -> (String, String) {
 }
 
 /// Helper: bikin product buat tenant pemilik `token` — tidak ada tenant_id
-/// yang dikirim, murni ditentukan dari token.
+/// yang dikirim, murni ditentukan dari token. Return id product-nya.
 async fn create_product(
     app: &Router,
     token: &str,
     sku: &str,
     price: f64,
     stock: i32,
-) {
+) -> String {
     let payload = serde_json::json!({
         "name": format!("Produk {sku}"),
         "sku": sku,
@@ -96,6 +96,10 @@ async fn create_product(
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::CREATED);
+    body_json(response).await["id"]
+        .as_str()
+        .unwrap()
+        .to_string()
 }
 
 #[tokio::test]
@@ -304,6 +308,144 @@ async fn order_fails_when_stock_insufficient() {
         .unwrap();
     let products = body_json(products_response).await;
     assert_eq!(products[0]["stock"], 2);
+}
+
+#[tokio::test]
+async fn update_product_changes_fields() {
+    let app = test_app();
+    let (token, _tenant_id) =
+        register(&app, "toko-budi", "budi@example.com").await;
+    let product_id = create_product(&app, &token, "SKU-001", 10_000.0, 5).await;
+
+    let payload = serde_json::json!({ "price": 20_000.0, "stock": 50 });
+    let response = app
+        .clone()
+        .oneshot(json_request(
+            "PATCH",
+            &format!("/products/{product_id}"),
+            Some(&token),
+            payload,
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let updated = body_json(response).await;
+    assert_eq!(updated["price"], 20_000.0);
+    assert_eq!(updated["stock"], 50);
+    // sku & name yang tidak dikirim harus tetap sama seperti sebelumnya.
+    assert_eq!(updated["sku"], "SKU-001");
+}
+
+#[tokio::test]
+async fn cannot_update_other_tenants_product() {
+    let app = test_app();
+    let (token_a, _) = register(&app, "toko-a", "a@example.com").await;
+    let (token_b, _) = register(&app, "toko-b", "b@example.com").await;
+    let product_id =
+        create_product(&app, &token_a, "SKU-001", 10_000.0, 5).await;
+
+    let payload = serde_json::json!({ "price": 1.0 });
+    let response = app
+        .oneshot(json_request(
+            "PATCH",
+            &format!("/products/{product_id}"),
+            Some(&token_b),
+            payload,
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn delete_product_removes_it_from_list() {
+    let app = test_app();
+    let (token, _tenant_id) =
+        register(&app, "toko-budi", "budi@example.com").await;
+    let product_id = create_product(&app, &token, "SKU-001", 10_000.0, 5).await;
+
+    let delete_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri(format!("/products/{product_id}"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(delete_response.status(), StatusCode::NO_CONTENT);
+
+    let list_response = app
+        .oneshot(get_request("/products", Some(&token)))
+        .await
+        .unwrap();
+    let products = body_json(list_response).await;
+    assert_eq!(products.as_array().unwrap().len(), 0);
+}
+
+#[tokio::test]
+async fn cancel_order_restores_stock_and_removes_order() {
+    let app = test_app();
+    let (token, _tenant_id) =
+        register(&app, "toko-budi", "budi@example.com").await;
+    create_product(&app, &token, "SKU-001", 15_000.0, 10).await;
+
+    let order_payload = serde_json::json!({
+        "customer_name": "Budi",
+        "items": [{ "sku": "SKU-001", "quantity": 4 }]
+    });
+    let order_response = app
+        .clone()
+        .oneshot(json_request("POST", "/orders", Some(&token), order_payload))
+        .await
+        .unwrap();
+    let order_id = body_json(order_response).await["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    // Stock sekarang 6 (10 - 4) sebelum dibatalkan.
+    let mid_products = app
+        .clone()
+        .oneshot(get_request("/products", Some(&token)))
+        .await
+        .unwrap();
+    assert_eq!(body_json(mid_products).await[0]["stock"], 6);
+
+    let cancel_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri(format!("/orders/{order_id}"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(cancel_response.status(), StatusCode::NO_CONTENT);
+
+    // Stock kembali ke 10 setelah dibatalkan.
+    let final_products = app
+        .clone()
+        .oneshot(get_request("/products", Some(&token)))
+        .await
+        .unwrap();
+    assert_eq!(body_json(final_products).await[0]["stock"], 10);
+
+    // Order sudah tidak ada lagi di list.
+    let orders_response = app
+        .oneshot(get_request("/orders", Some(&token)))
+        .await
+        .unwrap();
+    let orders = body_json(orders_response).await;
+    assert_eq!(orders.as_array().unwrap().len(), 0);
 }
 
 #[tokio::test]

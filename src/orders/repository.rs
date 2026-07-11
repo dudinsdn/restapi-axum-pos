@@ -11,6 +11,8 @@ pub trait OrderRepository: Send + Sync + 'static {
         &self,
         tenant_id: &str,
     ) -> impl Future<Output = Vec<Order>> + Send;
+    fn get(&self, id: &str) -> impl Future<Output = Option<Order>> + Send;
+    fn delete(&self, id: &str) -> impl Future<Output = bool> + Send;
 }
 
 #[derive(Debug, Default)]
@@ -41,5 +43,13 @@ impl OrderRepository for InMemoryOrderRepository {
             .filter(|order| order.tenant_id == tenant_id)
             .cloned()
             .collect()
+    }
+
+    async fn get(&self, id: &str) -> Option<Order> {
+        self.data.read().get(id).cloned()
+    }
+
+    async fn delete(&self, id: &str) -> bool {
+        self.data.write().remove(id).is_some()
     }
 }
