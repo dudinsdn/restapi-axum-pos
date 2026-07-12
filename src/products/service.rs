@@ -1,3 +1,4 @@
+use crate::audit::FieldChange;
 use crate::error::{AppError, Result};
 use crate::tenants::TenantRepository;
 use crate::users::Actor;
@@ -56,25 +57,53 @@ pub async fn update_product<PR: ProductRepository>(
     tenant_id: &str,
     product_id: &str,
     payload: UpdateProductRequest,
-) -> Result<Product> {
+) -> Result<(Product, Vec<FieldChange>)> {
     let mut product =
         fetch_owned_product(products, tenant_id, product_id).await?;
+    let mut changes = Vec::new();
 
     if let Some(name) = payload.name {
-        product.name = name;
+        if name != product.name {
+            changes.push(FieldChange {
+                field: "name".to_string(),
+                old_value: product.name.clone(),
+                new_value: name.clone(),
+            });
+            product.name = name;
+        }
     }
     if let Some(price) = payload.price {
-        product.price = price;
+        if price != product.price {
+            changes.push(FieldChange {
+                field: "price".to_string(),
+                old_value: product.price.to_string(),
+                new_value: price.to_string(),
+            });
+            product.price = price;
+        }
     }
     if let Some(stock) = payload.stock {
-        product.stock = stock;
+        if stock != product.stock {
+            changes.push(FieldChange {
+                field: "stock".to_string(),
+                old_value: product.stock.to_string(),
+                new_value: stock.to_string(),
+            });
+            product.stock = stock;
+        }
     }
     // `created_by` sengaja tidak berubah — itu tetap mencatat siapa yang
     // PERTAMA KALI bikin produknya. Siapa yang mengedit belakangan tercatat
     // di audit log, bukan menimpa `created_by`.
 
-    products.update(product.clone()).await;
-    Ok(product)
+    // Kalau tidak ada satu pun field yang benar-benar berubah nilainya
+    // (mis. client kirim value yang sama persis), tidak perlu tulis ulang
+    // ke storage — cukup return apa adanya tanpa `changes`.
+    if !changes.is_empty() {
+        products.update(product.clone()).await;
+    }
+
+    Ok((product, changes))
 }
 
 /// Return product yang dihapus (bukan cuma unit) — dipakai caller untuk

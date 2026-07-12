@@ -2,7 +2,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::users::Actor;
 
-use super::model::{AuditAction, AuditLogEntry, ResourceType};
+use super::model::{AuditAction, AuditLogEntry, FieldChange, ResourceType};
 use super::repository::AuditLogRepository;
 
 #[allow(clippy::too_many_arguments)]
@@ -14,6 +14,7 @@ pub async fn record<AR: AuditLogRepository>(
     resource_type: ResourceType,
     resource_id: &str,
     label: &str,
+    changes: Vec<FieldChange>,
 ) {
     let entry = AuditLogEntry {
         id: format!("audit-{}", uuid::Uuid::new_v4().simple()),
@@ -23,6 +24,7 @@ pub async fn record<AR: AuditLogRepository>(
         resource_type,
         resource_id: resource_id.to_string(),
         label: label.to_string(),
+        changes,
         at: now_unix(),
     };
 

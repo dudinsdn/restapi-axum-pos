@@ -70,6 +70,7 @@ where
         ResourceType::Order,
         &order.id,
         &format!("Order untuk {}", order.customer_name),
+        Vec::new(),
     )
     .await;
 
@@ -104,6 +105,7 @@ where
         ResourceType::Order,
         &order.id,
         &format!("Order untuk {} (dibatalkan)", order.customer_name),
+        Vec::new(),
     )
     .await;
 

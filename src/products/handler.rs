@@ -70,6 +70,7 @@ where
         ResourceType::Product,
         &product.id,
         &format!("{} ({})", product.name, product.sku),
+        Vec::new(),
     )
     .await;
 
@@ -89,7 +90,7 @@ where
     UR: UserRepository,
     AR: AuditLogRepository,
 {
-    let product = service::update_product(
+    let (product, changes) = service::update_product(
         &state.products,
         &auth_user.tenant_id,
         &product_id,
@@ -97,16 +98,21 @@ where
     )
     .await?;
 
-    crate::audit::service::record(
-        &state.audit,
-        &auth_user.tenant_id,
-        &Actor::from(&auth_user),
-        AuditAction::Updated,
-        ResourceType::Product,
-        &product.id,
-        &format!("{} ({})", product.name, product.sku),
-    )
-    .await;
+    // Tidak ada field yang benar-benar berubah nilainya (mis. client kirim
+    // value yang sama persis) -> tidak perlu tulis entry audit "kosong".
+    if !changes.is_empty() {
+        crate::audit::service::record(
+            &state.audit,
+            &auth_user.tenant_id,
+            &Actor::from(&auth_user),
+            AuditAction::Updated,
+            ResourceType::Product,
+            &product.id,
+            &format!("{} ({})", product.name, product.sku),
+            changes,
+        )
+        .await;
+    }
 
     Ok(Json(product))
 }
@@ -138,6 +144,7 @@ where
         ResourceType::Product,
         &product.id,
         &format!("{} ({})", product.name, product.sku),
+        Vec::new(),
     )
     .await;
 

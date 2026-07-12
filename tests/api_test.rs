@@ -599,6 +599,159 @@ async fn audit_logs_are_isolated_per_tenant() {
 }
 
 #[tokio::test]
+async fn audit_log_records_field_level_changes_on_update() {
+    let app = test_app();
+    let (token, _tenant_id) =
+        register(&app, "toko-budi", "budi@example.com").await;
+    let product_id = create_product(&app, &token, "SKU-001", 10_000.0, 5).await;
+
+    app.clone()
+        .oneshot(json_request(
+            "PATCH",
+            &format!("/products/{product_id}"),
+            Some(&token),
+            serde_json::json!({ "price": 12_000.0, "stock": 20 }),
+        ))
+        .await
+        .unwrap();
+
+    let logs_response = app
+        .oneshot(get_request("/tenants/me/audit-logs", Some(&token)))
+        .await
+        .unwrap();
+    let logs = body_json(logs_response).await;
+    let logs = logs.as_array().unwrap();
+
+    // logs[0] = update (terbaru), logs[1] = create.
+    let changes = logs[0]["changes"].as_array().unwrap();
+    assert_eq!(changes.len(), 2);
+
+    let price_change = changes
+        .iter()
+        .find(|c| c["field"] == "price")
+        .expect("ada perubahan field price");
+    assert_eq!(price_change["old_value"], "10000");
+    assert_eq!(price_change["new_value"], "12000");
+
+    let stock_change = changes
+        .iter()
+        .find(|c| c["field"] == "stock")
+        .expect("ada perubahan field stock");
+    assert_eq!(stock_change["old_value"], "5");
+    assert_eq!(stock_change["new_value"], "20");
+
+    // name tidak dikirim di payload -> tidak boleh muncul di changes.
+    assert!(changes.iter().all(|c| c["field"] != "name"));
+}
+
+#[tokio::test]
+async fn noop_update_does_not_write_audit_entry() {
+    let app = test_app();
+    let (token, _tenant_id) =
+        register(&app, "toko-budi", "budi@example.com").await;
+    let product_id = create_product(&app, &token, "SKU-001", 10_000.0, 5).await;
+
+    // Kirim price yang NILAINYA SAMA PERSIS dengan yang sekarang.
+    let response = app
+        .clone()
+        .oneshot(json_request(
+            "PATCH",
+            &format!("/products/{product_id}"),
+            Some(&token),
+            serde_json::json!({ "price": 10_000.0 }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let logs_response = app
+        .oneshot(get_request("/tenants/me/audit-logs", Some(&token)))
+        .await
+        .unwrap();
+    let logs = body_json(logs_response).await;
+    // Cuma entry "created" — tidak ada "updated" tambahan karena tidak ada
+    // field yang benar-benar berubah.
+    assert_eq!(logs.as_array().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn audit_log_records_which_fields_changed() {
+    let app = test_app();
+    let (token, _tenant_id) =
+        register(&app, "toko-budi", "budi@example.com").await;
+    let product_id = create_product(&app, &token, "SKU-001", 10_000.0, 5).await;
+
+    // Cuma ubah price & stock, name tidak dikirim -> tidak boleh muncul di
+    // changes.
+    app.clone()
+        .oneshot(json_request(
+            "PATCH",
+            &format!("/products/{product_id}"),
+            Some(&token),
+            serde_json::json!({ "price": 12_000.0, "stock": 8 }),
+        ))
+        .await
+        .unwrap();
+
+    let logs_response = app
+        .oneshot(get_request("/tenants/me/audit-logs", Some(&token)))
+        .await
+        .unwrap();
+    let logs = body_json(logs_response).await;
+    let update_entry = &logs[0];
+
+    assert_eq!(update_entry["action"], "updated");
+    let changes = update_entry["changes"].as_array().unwrap();
+    assert_eq!(changes.len(), 2);
+
+    let price_change = changes
+        .iter()
+        .find(|c| c["field"] == "price")
+        .expect("price change should be recorded");
+    assert_eq!(price_change["old_value"], "10000");
+    assert_eq!(price_change["new_value"], "12000");
+
+    let stock_change = changes
+        .iter()
+        .find(|c| c["field"] == "stock")
+        .expect("stock change should be recorded");
+    assert_eq!(stock_change["old_value"], "5");
+    assert_eq!(stock_change["new_value"], "8");
+
+    // name tidak dikirim di payload -> tidak dianggap "berubah".
+    assert!(changes.iter().all(|c| c["field"] != "name"));
+}
+
+#[tokio::test]
+async fn no_op_update_does_not_create_audit_entry() {
+    let app = test_app();
+    let (token, _tenant_id) =
+        register(&app, "toko-budi", "budi@example.com").await;
+    let product_id = create_product(&app, &token, "SKU-001", 10_000.0, 5).await;
+
+    // Kirim nilai yang PERSIS SAMA seperti sekarang -> tidak ada perubahan
+    // nyata, jadi tidak boleh nambah entry audit baru.
+    app.clone()
+        .oneshot(json_request(
+            "PATCH",
+            &format!("/products/{product_id}"),
+            Some(&token),
+            serde_json::json!({ "price": 10_000.0 }),
+        ))
+        .await
+        .unwrap();
+
+    let logs_response = app
+        .oneshot(get_request("/tenants/me/audit-logs", Some(&token)))
+        .await
+        .unwrap();
+    let logs = body_json(logs_response).await;
+    // Cuma entry "created" dari create_product tadi, tidak ada "updated".
+    assert_eq!(logs.as_array().unwrap().len(), 1);
+    assert_eq!(logs[0]["action"], "created");
+}
+
+#[tokio::test]
 async fn login_is_rate_limited_after_too_many_failures() {
     let app = test_app();
     register(&app, "toko-budi", "budi@example.com").await;
