@@ -11,7 +11,7 @@ use crate::error::Result;
 use crate::products::ProductRepository;
 use crate::state::AppState;
 use crate::tenants::TenantRepository;
-use crate::users::{Actor, AuthUser, UserRepository};
+use crate::users::{Actor, AuthUser, OwnerUser, UserRepository};
 
 use super::model::{CreateOrderRequest, Order};
 use super::repository::OrderRepository;
@@ -77,8 +77,11 @@ where
     Ok((StatusCode::CREATED, Json(order)))
 }
 
+/// Hanya owner yang boleh membatalkan order — mencegah staff/kasir menutupi
+/// transaksi yang sudah dibuat (mis. buat order lalu batalkan sendiri untuk
+/// menyembunyikan penjualan tunai).
 pub async fn cancel_order<TR, PR, OR, UR, AR>(
-    auth_user: AuthUser,
+    OwnerUser(auth_user): OwnerUser,
     Path(order_id): Path<String>,
     State(state): State<Arc<AppState<TR, PR, OR, UR, AR>>>,
 ) -> Result<StatusCode>

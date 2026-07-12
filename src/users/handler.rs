@@ -3,17 +3,16 @@ use std::sync::Arc;
 use axum::{Json, extract::State, http::StatusCode};
 
 use crate::audit::AuditLogRepository;
-use crate::error::{AppError, Result};
+use crate::error::Result;
 use crate::orders::OrderRepository;
 use crate::products::ProductRepository;
 use crate::state::AppState;
 use crate::tenants::TenantRepository;
 
-use super::extractor::AuthUser;
+use super::extractor::{AuthUser, OwnerUser};
 use super::jwt::issue_token;
 use super::model::{
-    AuthResponse, InviteStaffRequest, LoginRequest, PublicUser,
-    RegisterRequest, Role,
+    AuthResponse, InviteStaffRequest, LoginRequest, PublicUser, RegisterRequest,
 };
 use super::repository::UserRepository;
 use super::service;
@@ -79,7 +78,7 @@ where
 }
 
 pub async fn invite_staff<TR, PR, OR, UR, AR>(
-    auth_user: AuthUser,
+    OwnerUser(auth_user): OwnerUser,
     State(state): State<Arc<AppState<TR, PR, OR, UR, AR>>>,
     Json(payload): Json<InviteStaffRequest>,
 ) -> Result<(StatusCode, Json<PublicUser>)>
@@ -90,12 +89,6 @@ where
     UR: UserRepository,
     AR: AuditLogRepository,
 {
-    if auth_user.role != Role::Owner {
-        return Err(AppError::Forbidden(
-            "only the tenant owner can invite staff".into(),
-        ));
-    }
-
     let user =
         service::invite_staff(&state.users, &auth_user.tenant_id, payload)
             .await?;

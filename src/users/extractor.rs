@@ -81,3 +81,56 @@ where
         })
     }
 }
+
+/// Sama seperti `AuthUser`, tapi hanya berhasil di-extract kalau role user
+/// itu `Owner`. Endpoint yang harusnya cuma bisa diakses owner (mis. atur
+/// produk, invite staff, lihat audit log) tinggal ganti parameter handler
+/// dari `auth_user: AuthUser` menjadi `OwnerUser(auth_user): OwnerUser`.
+///
+/// Keuntungannya dibanding cek manual `if auth_user.role != Role::Owner`
+/// di dalam body handler: pengecekan jadi bagian dari *signature* handler,
+/// bukan langkah opsional yang bisa lupa ditulis atau terlewat saat
+/// endpoint baru ditambahkan / di-refactor.
+pub struct OwnerUser(pub AuthUser);
+
+impl std::ops::Deref for OwnerUser {
+    type Target = AuthUser;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl From<&OwnerUser> for Actor {
+    fn from(owner: &OwnerUser) -> Self {
+        Actor::from(&owner.0)
+    }
+}
+
+#[async_trait::async_trait]
+impl<TR, PR, OR, UR, AR> FromRequestParts<Arc<AppState<TR, PR, OR, UR, AR>>>
+    for OwnerUser
+where
+    TR: TenantRepository,
+    PR: ProductRepository,
+    OR: OrderRepository,
+    UR: UserRepository,
+    AR: AuditLogRepository,
+{
+    type Rejection = AppError;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &Arc<AppState<TR, PR, OR, UR, AR>>,
+    ) -> Result<Self> {
+        let auth_user = AuthUser::from_request_parts(parts, state).await?;
+
+        if auth_user.role != Role::Owner {
+            return Err(AppError::Forbidden(
+                "only the tenant owner can access this resource".into(),
+            ));
+        }
+
+        Ok(OwnerUser(auth_user))
+    }
+}
