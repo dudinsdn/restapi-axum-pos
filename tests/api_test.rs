@@ -311,6 +311,51 @@ async fn order_fails_when_stock_insufficient() {
 }
 
 #[tokio::test]
+async fn register_persists_tenant_address() {
+    let app = test_app();
+
+    let payload = serde_json::json!({
+        "tenant_name": "Toko Budi",
+        "tenant_slug": "toko-budi",
+        "tenant_address": "Jl. Merdeka No. 10, Bandung",
+        "email": "budi@example.com",
+        "password": "password123"
+    });
+    let register_response = app
+        .clone()
+        .oneshot(json_request("POST", "/auth/register", None, payload))
+        .await
+        .unwrap();
+    assert_eq!(register_response.status(), StatusCode::CREATED);
+    let token = body_json(register_response).await["token"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let me_response = app
+        .oneshot(get_request("/tenants/me", Some(&token)))
+        .await
+        .unwrap();
+    assert_eq!(me_response.status(), StatusCode::OK);
+    let tenant = body_json(me_response).await;
+    assert_eq!(tenant["address"], "Jl. Merdeka No. 10, Bandung");
+}
+
+#[tokio::test]
+async fn register_without_address_leaves_it_null() {
+    let app = test_app();
+    let (token, _tenant_id) =
+        register(&app, "toko-tanpa-alamat", "notaddr@example.com").await;
+
+    let me_response = app
+        .oneshot(get_request("/tenants/me", Some(&token)))
+        .await
+        .unwrap();
+    let tenant = body_json(me_response).await;
+    assert_eq!(tenant["address"], Value::Null);
+}
+
+#[tokio::test]
 async fn update_product_changes_fields() {
     let app = test_app();
     let (token, _tenant_id) =

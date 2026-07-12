@@ -25,6 +25,7 @@ pub struct User {
 pub struct RegisterRequest {
     pub tenant_name: String,
     pub tenant_slug: String,
+    pub tenant_address: Option<String>,
     pub email: String,
     pub password: String,
 }

@@ -23,7 +23,7 @@ where
         id: format!("tenant-{}", uuid::Uuid::new_v4().simple()),
         name: payload.tenant_name,
         slug: payload.tenant_slug,
-        address: None,
+        address: payload.tenant_address,
     };
 
     if !tenants.create(tenant.clone()).await {
