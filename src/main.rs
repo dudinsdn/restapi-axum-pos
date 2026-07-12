@@ -1,9 +1,10 @@
 use std::net::SocketAddr;
 
 use restapi_axum_pos::{
-    app::create_app, config::Config, orders::InMemoryOrderRepository,
-    products::InMemoryProductRepository, state::AppState,
-    tenants::InMemoryTenantRepository, users::InMemoryUserRepository,
+    app::create_app, audit::InMemoryAuditLogRepository, config::Config,
+    orders::InMemoryOrderRepository, products::InMemoryProductRepository,
+    state::AppState, tenants::InMemoryTenantRepository,
+    users::InMemoryUserRepository,
 };
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -26,6 +27,7 @@ async fn main() {
         InMemoryProductRepository::new(),
         InMemoryOrderRepository::new(),
         InMemoryUserRepository::new(),
+        InMemoryAuditLogRepository::new(),
         config.jwt_secret.clone(),
     );
 

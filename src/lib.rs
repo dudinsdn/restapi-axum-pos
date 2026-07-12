@@ -3,6 +3,7 @@ pub mod config;
 pub mod error;
 pub mod state;
 
+pub mod audit;
 pub mod orders;
 pub mod products;
 pub mod tenants;

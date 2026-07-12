@@ -7,6 +7,6 @@ pub mod service;
 pub mod session;
 
 pub use extractor::AuthUser;
-pub use model::{Role, User};
+pub use model::{Actor, Role, User};
 pub use repository::{InMemoryUserRepository, UserRepository};
 pub use session::{LoginRateLimiter, TokenRevocationList};

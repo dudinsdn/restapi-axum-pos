@@ -11,10 +11,20 @@ pub enum Role {
 pub struct User {
     pub id: String,
     pub tenant_id: String,
+    pub name: String,
     pub email: String,
     #[serde(skip_serializing)]
     pub password_hash: String,
     pub role: Role,
+}
+
+/// Identitas ringkas seorang user, ditempelkan ke resource (product, order,
+/// dst) dan ke audit log — supaya selalu jelas siapa yang melakukan apa,
+/// bahkan setelah resource aslinya dihapus.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Actor {
+    pub user_id: String,
+    pub name: String,
 }
 
 /// Registrasi sekaligus membuat tenant baru + user pertama sebagai Owner.
@@ -26,6 +36,7 @@ pub struct RegisterRequest {
     pub tenant_name: String,
     pub tenant_slug: String,
     pub tenant_address: Option<String>,
+    pub name: String,
     pub email: String,
     pub password: String,
 }
@@ -41,6 +52,7 @@ pub struct LoginRequest {
 /// (`AuthUser`), supaya owner tidak bisa iseng invite staff ke tenant lain.
 #[derive(Debug, Deserialize)]
 pub struct InviteStaffRequest {
+    pub name: String,
     pub email: String,
     pub password: String,
 }
@@ -49,6 +61,7 @@ pub struct InviteStaffRequest {
 pub struct PublicUser {
     pub id: String,
     pub tenant_id: String,
+    pub name: String,
     pub email: String,
     pub role: Role,
 }
@@ -58,6 +71,7 @@ impl From<User> for PublicUser {
         Self {
             id: user.id,
             tenant_id: user.tenant_id,
+            name: user.name,
             email: user.email,
             role: user.role,
         }

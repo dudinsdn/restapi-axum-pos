@@ -1,5 +1,6 @@
 use crate::error::{AppError, Result};
 use crate::tenants::TenantRepository;
+use crate::users::Actor;
 
 use super::model::{CreateProductRequest, Product, UpdateProductRequest};
 use super::repository::ProductRepository;
@@ -21,6 +22,7 @@ pub async fn create_product<PR, TR>(
     products: &PR,
     tenants: &TR,
     tenant_id: &str,
+    actor: Actor,
     payload: CreateProductRequest,
 ) -> Result<Product>
 where
@@ -36,6 +38,7 @@ where
         sku: payload.sku,
         price: payload.price,
         stock: payload.stock,
+        created_by: actor,
     };
 
     if !products.create(product.clone()).await {
@@ -66,19 +69,24 @@ pub async fn update_product<PR: ProductRepository>(
     if let Some(stock) = payload.stock {
         product.stock = stock;
     }
+    // `created_by` sengaja tidak berubah — itu tetap mencatat siapa yang
+    // PERTAMA KALI bikin produknya. Siapa yang mengedit belakangan tercatat
+    // di audit log, bukan menimpa `created_by`.
 
     products.update(product.clone()).await;
     Ok(product)
 }
 
+/// Return product yang dihapus (bukan cuma unit) — dipakai caller untuk
+/// menulis audit log dengan nama/sku produk itu sebelum datanya hilang.
 pub async fn delete_product<PR: ProductRepository>(
     products: &PR,
     tenant_id: &str,
     product_id: &str,
-) -> Result<()> {
+) -> Result<Product> {
     let product = fetch_owned_product(products, tenant_id, product_id).await?;
     products.delete(&product.id).await;
-    Ok(())
+    Ok(product)
 }
 
 /// Ambil product by id DAN pastikan milik tenant yang meminta. Kalau

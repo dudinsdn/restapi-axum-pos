@@ -15,6 +15,7 @@ const TOKEN_LIFETIME_SECS: u64 = 24 * 60 * 60; // 24 jam
 pub struct Claims {
     pub sub: String, // user id
     pub tenant_id: String,
+    pub name: String,
     pub role: Role,
     /// ID unik per token (bukan per user) — dipakai untuk revoke token
     /// spesifik ini saat logout, tanpa mempengaruhi token lain milik user
@@ -36,6 +37,7 @@ pub fn issue_token(user: &User, secret: &str) -> Result<String> {
     let claims = Claims {
         sub: user.id.clone(),
         tenant_id: user.tenant_id.clone(),
+        name: user.name.clone(),
         role: user.role,
         jti: uuid::Uuid::new_v4().to_string(),
         exp,

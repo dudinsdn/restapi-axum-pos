@@ -1,6 +1,7 @@
 use crate::error::{AppError, Result};
 use crate::products::ProductRepository;
 use crate::tenants::TenantRepository;
+use crate::users::Actor;
 
 use super::model::{CreateOrderRequest, Order, OrderItem};
 use super::repository::OrderRepository;
@@ -23,6 +24,7 @@ pub async fn create_order<OR, PR, TR>(
     products: &PR,
     tenants: &TR,
     tenant_id: &str,
+    actor: Actor,
     payload: CreateOrderRequest,
 ) -> Result<Order>
 where
@@ -97,6 +99,7 @@ where
         customer_name: payload.customer_name,
         items,
         total,
+        created_by: actor,
     };
 
     if !orders.create(order.clone()).await {
@@ -121,12 +124,15 @@ async fn rollback<PR: ProductRepository>(
 /// ada endpoint untuk edit item/quantity order yang sudah dibuat, karena
 /// order adalah catatan historis (mirip nota transaksi), bukan draft yang
 /// pantas diedit bebas. Kalau pesanannya salah, batalkan lalu buat ulang.
+///
+/// Return order yang dibatalkan — dipakai caller untuk menulis audit log
+/// sebelum datanya hilang.
 pub async fn cancel_order<OR, PR>(
     orders: &OR,
     products: &PR,
     tenant_id: &str,
     order_id: &str,
-) -> Result<()>
+) -> Result<Order>
 where
     OR: OrderRepository,
     PR: ProductRepository,
@@ -147,7 +153,7 @@ where
     }
 
     orders.delete(order_id).await;
-    Ok(())
+    Ok(order)
 }
 
 async fn ensure_tenant_exists<TR: TenantRepository>(

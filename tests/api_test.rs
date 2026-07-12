@@ -7,9 +7,10 @@ use serde_json::Value;
 use tower::ServiceExt;
 
 use restapi_axum_pos::{
-    app::create_app, orders::InMemoryOrderRepository,
-    products::InMemoryProductRepository, state::AppState,
-    tenants::InMemoryTenantRepository, users::InMemoryUserRepository,
+    app::create_app, audit::InMemoryAuditLogRepository,
+    orders::InMemoryOrderRepository, products::InMemoryProductRepository,
+    state::AppState, tenants::InMemoryTenantRepository,
+    users::InMemoryUserRepository,
 };
 
 fn test_app() -> Router {
@@ -18,6 +19,7 @@ fn test_app() -> Router {
         InMemoryProductRepository::new(),
         InMemoryOrderRepository::new(),
         InMemoryUserRepository::new(),
+        InMemoryAuditLogRepository::new(),
         "test-secret".to_string(),
     );
     create_app(state)
@@ -59,6 +61,7 @@ async fn register(app: &Router, slug: &str, email: &str) -> (String, String) {
     let payload = serde_json::json!({
         "tenant_name": "Toko Test",
         "tenant_slug": slug,
+        "name": "Budi Owner",
         "email": email,
         "password": "password123"
     });
@@ -125,6 +128,7 @@ async fn duplicate_slug_on_register_is_rejected() {
     let payload = serde_json::json!({
         "tenant_name": "Toko Lain",
         "tenant_slug": "toko-budi",
+        "name": "Lain Owner",
         "email": "lain@example.com",
         "password": "password123"
     });
@@ -143,6 +147,7 @@ async fn duplicate_email_on_register_is_rejected() {
     let payload = serde_json::json!({
         "tenant_name": "Toko Lain",
         "tenant_slug": "toko-lain",
+        "name": "Lain Owner",
         "email": "budi@example.com",
         "password": "password123"
     });
@@ -318,6 +323,7 @@ async fn register_persists_tenant_address() {
         "tenant_name": "Toko Budi",
         "tenant_slug": "toko-budi",
         "tenant_address": "Jl. Merdeka No. 10, Bandung",
+        "name": "Budi Owner",
         "email": "budi@example.com",
         "password": "password123"
     });
@@ -494,6 +500,105 @@ async fn cancel_order_restores_stock_and_removes_order() {
 }
 
 #[tokio::test]
+async fn product_and_order_record_who_created_them() {
+    let app = test_app();
+    let (token, _tenant_id) =
+        register(&app, "toko-budi", "budi@example.com").await;
+
+    let product_response = app
+        .clone()
+        .oneshot(json_request(
+            "POST",
+            "/products",
+            Some(&token),
+            serde_json::json!({ "name": "Kopi Susu", "sku": "SKU-001", "price": 15_000.0, "stock": 10 }),
+        ))
+        .await
+        .unwrap();
+    let product = body_json(product_response).await;
+    assert_eq!(product["created_by"]["name"], "Budi Owner");
+
+    let order_response = app
+        .oneshot(json_request(
+            "POST",
+            "/orders",
+            Some(&token),
+            serde_json::json!({
+                "customer_name": "Pelanggan",
+                "items": [{ "sku": "SKU-001", "quantity": 1 }]
+            }),
+        ))
+        .await
+        .unwrap();
+    let order = body_json(order_response).await;
+    assert_eq!(order["created_by"]["name"], "Budi Owner");
+}
+
+#[tokio::test]
+async fn audit_log_records_create_update_and_delete() {
+    let app = test_app();
+    let (token, _tenant_id) =
+        register(&app, "toko-budi", "budi@example.com").await;
+    let product_id = create_product(&app, &token, "SKU-001", 10_000.0, 5).await;
+
+    app.clone()
+        .oneshot(json_request(
+            "PATCH",
+            &format!("/products/{product_id}"),
+            Some(&token),
+            serde_json::json!({ "price": 12_000.0 }),
+        ))
+        .await
+        .unwrap();
+
+    app.clone()
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri(format!("/products/{product_id}"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let logs_response = app
+        .oneshot(get_request("/tenants/me/audit-logs", Some(&token)))
+        .await
+        .unwrap();
+    assert_eq!(logs_response.status(), StatusCode::OK);
+    let logs = body_json(logs_response).await;
+    let logs = logs.as_array().unwrap();
+
+    // Terbaru duluan: delete, update, create.
+    assert_eq!(logs.len(), 3);
+    assert_eq!(logs[0]["action"], "deleted");
+    assert_eq!(logs[1]["action"], "updated");
+    assert_eq!(logs[2]["action"], "created");
+    for entry in logs {
+        assert_eq!(entry["actor"]["name"], "Budi Owner");
+        assert_eq!(entry["resource_type"], "product");
+    }
+}
+
+#[tokio::test]
+async fn audit_logs_are_isolated_per_tenant() {
+    let app = test_app();
+    let (token_a, _) = register(&app, "toko-a", "a@example.com").await;
+    let (token_b, _) = register(&app, "toko-b", "b@example.com").await;
+
+    create_product(&app, &token_a, "SKU-001", 10_000.0, 5).await;
+
+    let logs_b = app
+        .oneshot(get_request("/tenants/me/audit-logs", Some(&token_b)))
+        .await
+        .unwrap();
+    let logs_b = body_json(logs_b).await;
+    assert_eq!(logs_b.as_array().unwrap().len(), 0);
+}
+
+#[tokio::test]
 async fn login_is_rate_limited_after_too_many_failures() {
     let app = test_app();
     register(&app, "toko-budi", "budi@example.com").await;
@@ -523,7 +628,7 @@ async fn owner_can_invite_staff_and_staff_can_login() {
     let (owner_token, _tenant_id) =
         register(&app, "toko-budi", "owner@example.com").await;
 
-    let payload = serde_json::json!({ "email": "staff@example.com", "password": "password123" });
+    let payload = serde_json::json!({ "name": "Staff Satu", "email": "staff@example.com", "password": "password123" });
     let response = app
         .clone()
         .oneshot(json_request(
@@ -537,6 +642,7 @@ async fn owner_can_invite_staff_and_staff_can_login() {
     assert_eq!(response.status(), StatusCode::CREATED);
     let created = body_json(response).await;
     assert_eq!(created["role"], "staff");
+    assert_eq!(created["name"], "Staff Satu");
 
     let login_payload = serde_json::json!({ "email": "staff@example.com", "password": "password123" });
     let login_response = app
@@ -552,7 +658,7 @@ async fn staff_cannot_invite_other_staff() {
     let (owner_token, _tenant_id) =
         register(&app, "toko-budi", "owner@example.com").await;
 
-    let invite_payload = serde_json::json!({ "email": "staff@example.com", "password": "password123" });
+    let invite_payload = serde_json::json!({ "name": "Staff Satu", "email": "staff@example.com", "password": "password123" });
     app.clone()
         .oneshot(json_request(
             "POST",
@@ -574,7 +680,7 @@ async fn staff_cannot_invite_other_staff() {
         .unwrap()
         .to_string();
 
-    let another_invite = serde_json::json!({ "email": "staff2@example.com", "password": "password123" });
+    let another_invite = serde_json::json!({ "name": "Staff Dua", "email": "staff2@example.com", "password": "password123" });
     let response = app
         .oneshot(json_request(
             "POST",

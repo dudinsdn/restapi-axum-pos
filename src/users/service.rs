@@ -39,6 +39,7 @@ where
     let user = User {
         id: format!("user-{}", uuid::Uuid::new_v4().simple()),
         tenant_id: tenant.id.clone(),
+        name: payload.name.trim().to_string(),
         email: email.clone(),
         password_hash,
         role: Role::Owner,
@@ -108,6 +109,7 @@ where
     let user = User {
         id: format!("user-{}", uuid::Uuid::new_v4().simple()),
         tenant_id: tenant_id.to_string(),
+        name: payload.name.trim().to_string(),
         email: email.clone(),
         password_hash,
         role: Role::Staff,

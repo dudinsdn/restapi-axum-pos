@@ -2,23 +2,20 @@ use std::sync::Arc;
 
 use axum::{Json, extract::State};
 
-use crate::audit::AuditLogRepository;
 use crate::error::Result;
 use crate::orders::OrderRepository;
 use crate::products::ProductRepository;
 use crate::state::AppState;
+use crate::tenants::TenantRepository;
 use crate::users::{AuthUser, UserRepository};
 
-use super::model::Tenant;
-use super::repository::TenantRepository;
-use super::service;
+use super::model::AuditLogEntry;
+use super::repository::AuditLogRepository;
 
-/// Info tenant milik user yang sedang login. Tidak ada lagi endpoint
-/// "list semua tenant" — setiap user cuma boleh lihat tenant-nya sendiri.
-pub async fn get_me<TR, PR, OR, UR, AR>(
+pub async fn list_audit_logs<TR, PR, OR, UR, AR>(
     auth_user: AuthUser,
     State(state): State<Arc<AppState<TR, PR, OR, UR, AR>>>,
-) -> Result<Json<Tenant>>
+) -> Result<Json<Vec<AuditLogEntry>>>
 where
     TR: TenantRepository,
     PR: ProductRepository,
@@ -26,7 +23,6 @@ where
     UR: UserRepository,
     AR: AuditLogRepository,
 {
-    let tenant =
-        service::get_tenant(&state.tenants, &auth_user.tenant_id).await?;
-    Ok(Json(tenant))
+    let logs = state.audit.list_by_tenant(&auth_user.tenant_id).await;
+    Ok(Json(logs))
 }

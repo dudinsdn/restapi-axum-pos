@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::users::Actor;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Product {
     pub id: String,
@@ -8,6 +10,7 @@ pub struct Product {
     pub sku: String,
     pub price: f64,
     pub stock: i32,
+    pub created_by: Actor,
 }
 
 #[derive(Debug, Deserialize)]
