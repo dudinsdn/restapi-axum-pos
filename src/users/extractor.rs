@@ -83,8 +83,8 @@ where
 }
 
 /// Sama seperti `AuthUser`, tapi hanya berhasil di-extract kalau role user
-/// itu `Owner`. Endpoint yang harusnya cuma bisa diakses owner (mis. atur
-/// produk, invite staff, lihat audit log) tinggal ganti parameter handler
+/// itu `Owner`. Dipakai untuk endpoint yang cuma boleh dilakukan pemilik
+/// tenant (mis. mengundang user baru) — tinggal ganti parameter handler
 /// dari `auth_user: AuthUser` menjadi `OwnerUser(auth_user): OwnerUser`.
 ///
 /// Keuntungannya dibanding cek manual `if auth_user.role != Role::Owner`
@@ -132,5 +132,54 @@ where
         }
 
         Ok(OwnerUser(auth_user))
+    }
+}
+
+/// Sama seperti `AuthUser`, tapi hanya berhasil di-extract kalau role user
+/// itu `Owner` atau `Admin` — dua role yang mengelola operasional toko
+/// (katalog produk, pembatalan order, audit log). `Cashier` sengaja tidak
+/// termasuk: tugasnya cuma jualan (lihat produk, buat order), bukan
+/// mengelola toko.
+pub struct ManagerUser(pub AuthUser);
+
+impl std::ops::Deref for ManagerUser {
+    type Target = AuthUser;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl From<&ManagerUser> for Actor {
+    fn from(manager: &ManagerUser) -> Self {
+        Actor::from(&manager.0)
+    }
+}
+
+#[async_trait::async_trait]
+impl<TR, PR, OR, UR, AR> FromRequestParts<Arc<AppState<TR, PR, OR, UR, AR>>>
+    for ManagerUser
+where
+    TR: TenantRepository,
+    PR: ProductRepository,
+    OR: OrderRepository,
+    UR: UserRepository,
+    AR: AuditLogRepository,
+{
+    type Rejection = AppError;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &Arc<AppState<TR, PR, OR, UR, AR>>,
+    ) -> Result<Self> {
+        let auth_user = AuthUser::from_request_parts(parts, state).await?;
+
+        if !matches!(auth_user.role, Role::Owner | Role::Admin) {
+            return Err(AppError::Forbidden(
+                "only the owner or an admin can access this resource".into(),
+            ));
+        }
+
+        Ok(ManagerUser(auth_user))
     }
 }

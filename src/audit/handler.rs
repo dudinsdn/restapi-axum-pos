@@ -7,16 +7,15 @@ use crate::orders::OrderRepository;
 use crate::products::ProductRepository;
 use crate::state::AppState;
 use crate::tenants::TenantRepository;
-use crate::users::{OwnerUser, UserRepository};
+use crate::users::{ManagerUser, UserRepository};
 
 use super::model::AuditLogEntry;
 use super::repository::AuditLogRepository;
 
-/// Hanya owner yang boleh melihat audit log — ini adalah jejak siapa
-/// mengubah/menghapus apa, jadi staff/kasir tidak diberi akses (mis. supaya
-/// staff tidak bisa memeriksa apakah aktivitasnya sendiri "ketahuan").
+/// Owner dan Admin boleh melihat audit log — Cashier tidak, supaya kasir
+/// tidak bisa memeriksa apakah aktivitasnya sendiri "ketahuan".
 pub async fn list_audit_logs<TR, PR, OR, UR, AR>(
-    OwnerUser(auth_user): OwnerUser,
+    ManagerUser(auth_user): ManagerUser,
     State(state): State<Arc<AppState<TR, PR, OR, UR, AR>>>,
 ) -> Result<Json<Vec<AuditLogEntry>>>
 where

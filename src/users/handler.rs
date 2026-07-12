@@ -77,6 +77,8 @@ where
     StatusCode::NO_CONTENT
 }
 
+/// Hanya owner yang boleh mengundang user baru — dan owner yang memilih
+/// role-nya (`Admin` atau `Cashier`) lewat field `role` di body.
 pub async fn invite_staff<TR, PR, OR, UR, AR>(
     OwnerUser(auth_user): OwnerUser,
     State(state): State<Arc<AppState<TR, PR, OR, UR, AR>>>,

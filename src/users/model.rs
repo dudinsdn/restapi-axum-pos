@@ -1,10 +1,19 @@
 use serde::{Deserialize, Serialize};
 
+/// Tiga tingkat akses:
+/// - `Owner`: pemilik tenant, dibuat otomatis saat `register`. Bisa
+///   melakukan apa saja, termasuk mengundang `Admin`/`Cashier` baru.
+/// - `Admin`: mengelola operasional toko sehari-hari — atur katalog produk,
+///   batalkan order, lihat audit log. Tidak bisa mengundang user lain.
+/// - `Cashier`: kasir, cuma boleh lihat produk & buat order (transaksi
+///   jualan). Tidak bisa mengubah katalog, membatalkan order, atau melihat
+///   audit log.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum Role {
     Owner,
-    Staff,
+    Admin,
+    Cashier,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -47,14 +56,17 @@ pub struct LoginRequest {
     pub password: String,
 }
 
-/// Owner mengundang staff baru ke tenant-nya sendiri. `tenant_id` TIDAK
-/// diterima dari body — selalu diambil dari tenant milik pemanggil
-/// (`AuthUser`), supaya owner tidak bisa iseng invite staff ke tenant lain.
+/// Owner mengundang user baru (Admin atau Cashier) ke tenant-nya sendiri.
+/// `tenant_id` TIDAK diterima dari body — selalu diambil dari tenant milik
+/// pemanggil (`AuthUser`), supaya owner tidak bisa iseng invite ke tenant
+/// lain. `role` divalidasi di service: tidak boleh `Owner` (cuma ada satu
+/// owner per tenant, dibuat lewat `register`).
 #[derive(Debug, Deserialize)]
 pub struct InviteStaffRequest {
     pub name: String,
     pub email: String,
     pub password: String,
+    pub role: Role,
 }
 
 #[derive(Debug, Serialize)]

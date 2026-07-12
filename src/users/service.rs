@@ -103,6 +103,12 @@ pub async fn invite_staff<UR>(
 where
     UR: UserRepository,
 {
+    if payload.role == Role::Owner {
+        return Err(AppError::BadRequest(
+            "cannot invite a user with the owner role".into(),
+        ));
+    }
+
     let email = payload.email.trim().to_lowercase();
     let password_hash = hash_password(&payload.password)?;
 
@@ -112,7 +118,7 @@ where
         name: payload.name.trim().to_string(),
         email: email.clone(),
         password_hash,
-        role: Role::Staff,
+        role: payload.role,
     };
 
     if !users.create(user.clone()).await {

@@ -105,17 +105,20 @@ async fn create_product(
         .to_string()
 }
 
-/// Helper: owner (pemilik `owner_token`) invite staff baru lalu langsung
-/// login sebagai staff itu. Return token staff-nya.
-async fn invite_and_login_staff(
+/// Helper: owner (pemilik `owner_token`) invite user baru dengan `role`
+/// tertentu ("admin" atau "cashier"), lalu langsung login sebagai user itu.
+/// Return token-nya.
+async fn invite_and_login(
     app: &Router,
     owner_token: &str,
     email: &str,
+    role: &str,
 ) -> String {
     let invite_payload = serde_json::json!({
-        "name": "Staff",
+        "name": "Invited User",
         "email": email,
-        "password": "password123"
+        "password": "password123",
+        "role": role
     });
     let response = app
         .clone()
@@ -813,28 +816,49 @@ async fn login_is_rate_limited_after_too_many_failures() {
 }
 
 #[tokio::test]
-async fn owner_can_invite_staff_and_staff_can_login() {
+async fn owner_can_invite_admin_and_cashier_and_both_can_login() {
     let app = test_app();
     let (owner_token, _tenant_id) =
         register(&app, "toko-budi", "owner@example.com").await;
 
-    let payload = serde_json::json!({ "name": "Staff Satu", "email": "staff@example.com", "password": "password123" });
-    let response = app
+    let admin_payload = serde_json::json!({
+        "name": "Admin Satu", "email": "admin@example.com",
+        "password": "password123", "role": "admin"
+    });
+    let admin_response = app
         .clone()
         .oneshot(json_request(
             "POST",
             "/tenants/me/users",
             Some(&owner_token),
-            payload,
+            admin_payload,
         ))
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::CREATED);
-    let created = body_json(response).await;
-    assert_eq!(created["role"], "staff");
-    assert_eq!(created["name"], "Staff Satu");
+    assert_eq!(admin_response.status(), StatusCode::CREATED);
+    let created_admin = body_json(admin_response).await;
+    assert_eq!(created_admin["role"], "admin");
+    assert_eq!(created_admin["name"], "Admin Satu");
 
-    let login_payload = serde_json::json!({ "email": "staff@example.com", "password": "password123" });
+    let cashier_payload = serde_json::json!({
+        "name": "Kasir Satu", "email": "kasir@example.com",
+        "password": "password123", "role": "cashier"
+    });
+    let cashier_response = app
+        .clone()
+        .oneshot(json_request(
+            "POST",
+            "/tenants/me/users",
+            Some(&owner_token),
+            cashier_payload,
+        ))
+        .await
+        .unwrap();
+    assert_eq!(cashier_response.status(), StatusCode::CREATED);
+    let created_cashier = body_json(cashier_response).await;
+    assert_eq!(created_cashier["role"], "cashier");
+
+    let login_payload = serde_json::json!({ "email": "admin@example.com", "password": "password123" });
     let login_response = app
         .oneshot(json_request("POST", "/auth/login", None, login_payload))
         .await
@@ -843,45 +867,67 @@ async fn owner_can_invite_staff_and_staff_can_login() {
 }
 
 #[tokio::test]
-async fn staff_cannot_invite_other_staff() {
+async fn cannot_invite_a_second_owner() {
     let app = test_app();
     let (owner_token, _tenant_id) =
         register(&app, "toko-budi", "owner@example.com").await;
 
-    let invite_payload = serde_json::json!({ "name": "Staff Satu", "email": "staff@example.com", "password": "password123" });
-    app.clone()
-        .oneshot(json_request(
-            "POST",
-            "/tenants/me/users",
-            Some(&owner_token),
-            invite_payload,
-        ))
-        .await
-        .unwrap();
-
-    let login_payload = serde_json::json!({ "email": "staff@example.com", "password": "password123" });
-    let login_response = app
-        .clone()
-        .oneshot(json_request("POST", "/auth/login", None, login_payload))
-        .await
-        .unwrap();
-    let staff_token = body_json(login_response).await["token"]
-        .as_str()
-        .unwrap()
-        .to_string();
-
-    let another_invite = serde_json::json!({ "name": "Staff Dua", "email": "staff2@example.com", "password": "password123" });
+    let payload = serde_json::json!({
+        "name": "Owner Dua", "email": "owner2@example.com",
+        "password": "password123", "role": "owner"
+    });
     let response = app
         .oneshot(json_request(
             "POST",
             "/tenants/me/users",
-            Some(&staff_token),
+            Some(&owner_token),
+            payload,
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn only_owner_can_invite_new_users() {
+    let app = test_app();
+    let (owner_token, _tenant_id) =
+        register(&app, "toko-budi", "owner@example.com").await;
+    let admin_token =
+        invite_and_login(&app, &owner_token, "admin@example.com", "admin")
+            .await;
+    let cashier_token =
+        invite_and_login(&app, &owner_token, "kasir@example.com", "cashier")
+            .await;
+
+    let another_invite = serde_json::json!({
+        "name": "Kasir Dua", "email": "kasir2@example.com",
+        "password": "password123", "role": "cashier"
+    });
+    let admin_response = app
+        .clone()
+        .oneshot(json_request(
+            "POST",
+            "/tenants/me/users",
+            Some(&admin_token),
+            another_invite.clone(),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(admin_response.status(), StatusCode::FORBIDDEN);
+
+    let cashier_response = app
+        .oneshot(json_request(
+            "POST",
+            "/tenants/me/users",
+            Some(&cashier_token),
             another_invite,
         ))
         .await
         .unwrap();
 
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert_eq!(cashier_response.status(), StatusCode::FORBIDDEN);
 }
 
 #[tokio::test]
@@ -917,17 +963,18 @@ async fn logout_revokes_the_token() {
 }
 
 #[tokio::test]
-async fn staff_can_view_products_and_create_orders() {
+async fn cashier_can_view_products_and_create_orders() {
     let app = test_app();
     let (owner_token, _tenant_id) =
         register(&app, "toko-budi", "owner@example.com").await;
     create_product(&app, &owner_token, "SKU-001", 15_000.0, 10).await;
-    let staff_token =
-        invite_and_login_staff(&app, &owner_token, "staff@example.com").await;
+    let cashier_token =
+        invite_and_login(&app, &owner_token, "kasir@example.com", "cashier")
+            .await;
 
     let list_response = app
         .clone()
-        .oneshot(get_request("/products", Some(&staff_token)))
+        .oneshot(get_request("/products", Some(&cashier_token)))
         .await
         .unwrap();
     assert_eq!(list_response.status(), StatusCode::OK);
@@ -940,7 +987,7 @@ async fn staff_can_view_products_and_create_orders() {
         .oneshot(json_request(
             "POST",
             "/orders",
-            Some(&staff_token),
+            Some(&cashier_token),
             order_payload,
         ))
         .await
@@ -949,63 +996,109 @@ async fn staff_can_view_products_and_create_orders() {
 }
 
 #[tokio::test]
-async fn staff_cannot_manage_product_catalog() {
+async fn admin_can_manage_product_catalog_but_cashier_cannot() {
     let app = test_app();
     let (owner_token, _tenant_id) =
         register(&app, "toko-budi", "owner@example.com").await;
-    let product_id =
-        create_product(&app, &owner_token, "SKU-001", 15_000.0, 10).await;
-    let staff_token =
-        invite_and_login_staff(&app, &owner_token, "staff@example.com").await;
+    let admin_token =
+        invite_and_login(&app, &owner_token, "admin@example.com", "admin")
+            .await;
+    let cashier_token =
+        invite_and_login(&app, &owner_token, "kasir@example.com", "cashier")
+            .await;
 
     let create_payload = serde_json::json!({
         "name": "Produk Baru", "sku": "SKU-002", "price": 5_000.0, "stock": 1
     });
-    let create_response = app
+    let admin_create = app
         .clone()
         .oneshot(json_request(
             "POST",
             "/products",
-            Some(&staff_token),
+            Some(&admin_token),
+            create_payload.clone(),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(admin_create.status(), StatusCode::CREATED);
+    let product_id = body_json(admin_create).await["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let cashier_create = app
+        .clone()
+        .oneshot(json_request(
+            "POST",
+            "/products",
+            Some(&cashier_token),
             create_payload,
         ))
         .await
         .unwrap();
-    assert_eq!(create_response.status(), StatusCode::FORBIDDEN);
+    assert_eq!(cashier_create.status(), StatusCode::FORBIDDEN);
 
     let update_payload = serde_json::json!({ "price": 20_000.0 });
-    let update_response = app
+    let admin_update = app
         .clone()
         .oneshot(json_request(
             "PATCH",
             &format!("/products/{product_id}"),
-            Some(&staff_token),
+            Some(&admin_token),
+            update_payload.clone(),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(admin_update.status(), StatusCode::OK);
+
+    let cashier_update = app
+        .clone()
+        .oneshot(json_request(
+            "PATCH",
+            &format!("/products/{product_id}"),
+            Some(&cashier_token),
             update_payload,
         ))
         .await
         .unwrap();
-    assert_eq!(update_response.status(), StatusCode::FORBIDDEN);
+    assert_eq!(cashier_update.status(), StatusCode::FORBIDDEN);
 
-    let delete_response = app
+    let cashier_delete = app
+        .clone()
         .oneshot(json_request(
             "DELETE",
             &format!("/products/{product_id}"),
-            Some(&staff_token),
+            Some(&cashier_token),
             serde_json::json!({}),
         ))
         .await
         .unwrap();
-    assert_eq!(delete_response.status(), StatusCode::FORBIDDEN);
+    assert_eq!(cashier_delete.status(), StatusCode::FORBIDDEN);
+
+    let admin_delete = app
+        .oneshot(json_request(
+            "DELETE",
+            &format!("/products/{product_id}"),
+            Some(&admin_token),
+            serde_json::json!({}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(admin_delete.status(), StatusCode::NO_CONTENT);
 }
 
 #[tokio::test]
-async fn staff_cannot_cancel_order() {
+async fn admin_can_cancel_order_but_cashier_cannot() {
     let app = test_app();
     let (owner_token, _tenant_id) =
         register(&app, "toko-budi", "owner@example.com").await;
     create_product(&app, &owner_token, "SKU-001", 15_000.0, 10).await;
-    let staff_token =
-        invite_and_login_staff(&app, &owner_token, "staff@example.com").await;
+    let admin_token =
+        invite_and_login(&app, &owner_token, "admin@example.com", "admin")
+            .await;
+    let cashier_token =
+        invite_and_login(&app, &owner_token, "kasir@example.com", "cashier")
+            .await;
 
     let order_payload = serde_json::json!({
         "customer_name": "Pelanggan",
@@ -1026,37 +1119,53 @@ async fn staff_cannot_cancel_order() {
         .unwrap()
         .to_string();
 
-    let cancel_response = app
+    let cashier_cancel = app
+        .clone()
         .oneshot(json_request(
             "DELETE",
             &format!("/orders/{order_id}"),
-            Some(&staff_token),
+            Some(&cashier_token),
             serde_json::json!({}),
         ))
         .await
         .unwrap();
-    assert_eq!(cancel_response.status(), StatusCode::FORBIDDEN);
+    assert_eq!(cashier_cancel.status(), StatusCode::FORBIDDEN);
+
+    let admin_cancel = app
+        .oneshot(json_request(
+            "DELETE",
+            &format!("/orders/{order_id}"),
+            Some(&admin_token),
+            serde_json::json!({}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(admin_cancel.status(), StatusCode::NO_CONTENT);
 }
 
 #[tokio::test]
-async fn only_owner_can_view_audit_logs() {
+async fn admin_can_view_audit_logs_but_cashier_cannot() {
     let app = test_app();
     let (owner_token, _tenant_id) =
         register(&app, "toko-budi", "owner@example.com").await;
     create_product(&app, &owner_token, "SKU-001", 15_000.0, 10).await;
-    let staff_token =
-        invite_and_login_staff(&app, &owner_token, "staff@example.com").await;
+    let admin_token =
+        invite_and_login(&app, &owner_token, "admin@example.com", "admin")
+            .await;
+    let cashier_token =
+        invite_and_login(&app, &owner_token, "kasir@example.com", "cashier")
+            .await;
 
-    let staff_response = app
+    let cashier_response = app
         .clone()
-        .oneshot(get_request("/tenants/me/audit-logs", Some(&staff_token)))
+        .oneshot(get_request("/tenants/me/audit-logs", Some(&cashier_token)))
         .await
         .unwrap();
-    assert_eq!(staff_response.status(), StatusCode::FORBIDDEN);
+    assert_eq!(cashier_response.status(), StatusCode::FORBIDDEN);
 
-    let owner_response = app
-        .oneshot(get_request("/tenants/me/audit-logs", Some(&owner_token)))
+    let admin_response = app
+        .oneshot(get_request("/tenants/me/audit-logs", Some(&admin_token)))
         .await
         .unwrap();
-    assert_eq!(owner_response.status(), StatusCode::OK);
+    assert_eq!(admin_response.status(), StatusCode::OK);
 }

@@ -11,7 +11,7 @@ use crate::error::Result;
 use crate::orders::OrderRepository;
 use crate::state::AppState;
 use crate::tenants::TenantRepository;
-use crate::users::{Actor, AuthUser, OwnerUser, UserRepository};
+use crate::users::{Actor, AuthUser, ManagerUser, UserRepository};
 
 use super::model::{CreateProductRequest, Product, UpdateProductRequest};
 use super::repository::ProductRepository;
@@ -40,10 +40,10 @@ where
     Ok(Json(products))
 }
 
-/// Hanya owner yang boleh menambah produk ke katalog — staff/kasir cukup
+/// Owner dan Admin boleh menambah produk ke katalog — Cashier cukup
 /// bisa melihat & menjual, tidak mengelola stok/harga.
 pub async fn create_product<TR, PR, OR, UR, AR>(
-    OwnerUser(auth_user): OwnerUser,
+    ManagerUser(auth_user): ManagerUser,
     State(state): State<Arc<AppState<TR, PR, OR, UR, AR>>>,
     Json(payload): Json<CreateProductRequest>,
 ) -> Result<(StatusCode, Json<Product>)>
@@ -79,9 +79,9 @@ where
     Ok((StatusCode::CREATED, Json(product)))
 }
 
-/// Hanya owner yang boleh mengubah data produk (harga, stok, dst).
+/// Owner dan Admin boleh mengubah data produk (harga, stok, dst).
 pub async fn update_product<TR, PR, OR, UR, AR>(
-    OwnerUser(auth_user): OwnerUser,
+    ManagerUser(auth_user): ManagerUser,
     Path(product_id): Path<String>,
     State(state): State<Arc<AppState<TR, PR, OR, UR, AR>>>,
     Json(payload): Json<UpdateProductRequest>,
@@ -120,9 +120,9 @@ where
     Ok(Json(product))
 }
 
-/// Hanya owner yang boleh menghapus produk dari katalog.
+/// Owner dan Admin boleh menghapus produk dari katalog.
 pub async fn delete_product<TR, PR, OR, UR, AR>(
-    OwnerUser(auth_user): OwnerUser,
+    ManagerUser(auth_user): ManagerUser,
     Path(product_id): Path<String>,
     State(state): State<Arc<AppState<TR, PR, OR, UR, AR>>>,
 ) -> Result<StatusCode>
