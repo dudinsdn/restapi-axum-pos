@@ -8,6 +8,10 @@ pub struct OrderItem {
     pub name: String,
     pub quantity: i32,
     pub unit_price: f64,
+    /// Snapshot `cost_price` produk pada saat order dibuat — sama alasannya
+    /// dengan `unit_price`: kalau `cost_price` produk diubah belakangan,
+    /// laporan profit atas order LAMA tidak boleh ikut berubah.
+    pub unit_cost: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -25,6 +29,9 @@ pub struct Order {
     pub items: Vec<OrderItem>,
     pub total: f64,
     pub created_by: Actor,
+    /// Unix timestamp (detik) saat order dibuat — dipakai laporan profit
+    /// untuk filter rentang waktu (`from`/`to`).
+    pub created_at: u64,
 }
 
 #[derive(Debug, Deserialize)]

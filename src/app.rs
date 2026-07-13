@@ -9,6 +9,7 @@ use crate::{
     health_check,
     orders::{self, OrderRepository},
     products::{self, ProductRepository},
+    reports,
     state::AppState,
     tenants::{self, TenantRepository},
     users::{self, UserRepository},
@@ -52,6 +53,10 @@ where
         .route(
             "/tenants/me/audit-logs",
             get(audit::handler::list_audit_logs::<TR, PR, OR, UR, AR, CR>),
+        )
+        .route(
+            "/tenants/me/reports/profit",
+            get(reports::handler::profit_report::<TR, PR, OR, UR, AR, CR>),
         )
         .route(
             "/products",

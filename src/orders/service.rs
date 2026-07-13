@@ -1,3 +1,5 @@
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use crate::customers::CustomerRepository;
 use crate::error::{AppError, Result};
 use crate::products::ProductRepository;
@@ -98,6 +100,7 @@ where
             name: product.name,
             quantity: requested.quantity,
             unit_price: product.price,
+            unit_cost: product.cost_price,
         });
     }
 
@@ -114,6 +117,7 @@ where
         items,
         total,
         created_by: actor,
+        created_at: now_unix(),
     };
 
     if !orders.create(order.clone()).await {
@@ -122,6 +126,13 @@ where
     }
 
     Ok(order)
+}
+
+fn now_unix() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_secs())
+        .unwrap_or(0)
 }
 
 async fn rollback<PR: ProductRepository>(

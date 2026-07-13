@@ -38,6 +38,7 @@ where
         name: payload.name,
         sku: payload.sku,
         price: payload.price,
+        cost_price: payload.cost_price,
         stock: payload.stock,
         created_by: actor,
     };
@@ -80,6 +81,16 @@ pub async fn update_product<PR: ProductRepository>(
                 new_value: price.to_string(),
             });
             product.price = price;
+        }
+    }
+    if let Some(cost_price) = payload.cost_price {
+        if cost_price != product.cost_price {
+            changes.push(FieldChange {
+                field: "cost_price".to_string(),
+                old_value: product.cost_price.to_string(),
+                new_value: cost_price.to_string(),
+            });
+            product.cost_price = cost_price;
         }
     }
     if let Some(stock) = payload.stock {

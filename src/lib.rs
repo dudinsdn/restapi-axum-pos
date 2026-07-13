@@ -7,6 +7,7 @@ pub mod audit;
 pub mod customers;
 pub mod orders;
 pub mod products;
+pub mod reports;
 pub mod tenants;
 pub mod users;
 
