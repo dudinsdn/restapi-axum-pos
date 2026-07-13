@@ -5,6 +5,7 @@ use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
 use crate::{
     audit::{self, AuditLogRepository},
+    customers::{self, CustomerRepository},
     health_check,
     orders::{self, OrderRepository},
     products::{self, ProductRepository},
@@ -13,8 +14,8 @@ use crate::{
     users::{self, UserRepository},
 };
 
-pub fn create_app<TR, PR, OR, UR, AR>(
-    state: Arc<AppState<TR, PR, OR, UR, AR>>,
+pub fn create_app<TR, PR, OR, UR, AR, CR>(
+    state: Arc<AppState<TR, PR, OR, UR, AR, CR>>,
 ) -> Router
 where
     TR: TenantRepository,
@@ -22,57 +23,96 @@ where
     OR: OrderRepository,
     UR: UserRepository,
     AR: AuditLogRepository,
+    CR: CustomerRepository,
 {
     Router::new()
         .route("/health", get(health_check))
         .route(
             "/auth/register",
-            axum::routing::post(users::handler::register::<TR, PR, OR, UR, AR>),
+            axum::routing::post(users::handler::register::<TR, PR, OR, UR, AR, CR>),
         )
         .route(
             "/auth/login",
-            axum::routing::post(users::handler::login::<TR, PR, OR, UR, AR>),
+            axum::routing::post(users::handler::login::<TR, PR, OR, UR, AR, CR>),
         )
         .route(
             "/auth/logout",
-            axum::routing::post(users::handler::logout::<TR, PR, OR, UR, AR>),
+            axum::routing::post(users::handler::logout::<TR, PR, OR, UR, AR, CR>),
         )
         .route(
             "/tenants/me",
-            get(tenants::handler::get_me::<TR, PR, OR, UR, AR>),
+            get(tenants::handler::get_me::<TR, PR, OR, UR, AR, CR>),
         )
         .route(
             "/tenants/me/users",
             axum::routing::post(
-                users::handler::invite_staff::<TR, PR, OR, UR, AR>,
+                users::handler::invite_staff::<TR, PR, OR, UR, AR, CR>,
             ),
         )
         .route(
             "/tenants/me/audit-logs",
-            get(audit::handler::list_audit_logs::<TR, PR, OR, UR, AR>),
+            get(audit::handler::list_audit_logs::<TR, PR, OR, UR, AR, CR>),
         )
         .route(
             "/products",
-            get(products::handler::list_products::<TR, PR, OR, UR, AR>)
-                .post(products::handler::create_product::<TR, PR, OR, UR, AR>),
+            get(products::handler::list_products::<TR, PR, OR, UR, AR, CR>)
+                .post(products::handler::create_product::<TR, PR, OR, UR, AR, CR>),
         )
         .route(
             "/products/:product_id",
             axum::routing::patch(
-                products::handler::update_product::<TR, PR, OR, UR, AR>,
+                products::handler::update_product::<TR, PR, OR, UR, AR, CR>,
             )
-            .delete(products::handler::delete_product::<TR, PR, OR, UR, AR>),
+            .delete(products::handler::delete_product::<TR, PR, OR, UR, AR, CR>),
         )
         .route(
             "/orders",
-            get(orders::handler::list_orders::<TR, PR, OR, UR, AR>)
-                .post(orders::handler::create_order::<TR, PR, OR, UR, AR>),
+            get(orders::handler::list_orders::<TR, PR, OR, UR, AR, CR>)
+                .post(orders::handler::create_order::<TR, PR, OR, UR, AR, CR>),
         )
         .route(
             "/orders/:order_id",
             axum::routing::delete(
-                orders::handler::cancel_order::<TR, PR, OR, UR, AR>,
+                orders::handler::cancel_order::<TR, PR, OR, UR, AR, CR>,
             ),
+        )
+        .route(
+            "/customers",
+            get(customers::handler::list_customers::<TR, PR, OR, UR, AR, CR>)
+                .post(
+                    customers::handler::create_customer::<
+                        TR,
+                        PR,
+                        OR,
+                        UR,
+                        AR,
+                        CR,
+                    >,
+                ),
+        )
+        .route(
+            "/customers/:customer_id",
+            get(customers::handler::get_customer::<TR, PR, OR, UR, AR, CR>)
+                .patch(
+                    customers::handler::update_customer::<
+                        TR,
+                        PR,
+                        OR,
+                        UR,
+                        AR,
+                        CR,
+                    >,
+                )
+                .delete(
+                    customers::handler::delete_customer::<
+                        TR,
+                        PR,
+                        OR,
+                        UR,
+                        AR,
+                        CR,
+                    >,
+                ),
         )
         .layer(DefaultBodyLimit::max(1024 * 1024))
         .layer(

@@ -15,6 +15,7 @@ pub enum AuditAction {
 pub enum ResourceType {
     Product,
     Order,
+    Customer,
 }
 
 /// Satu field yang berubah saat update: nilai sebelum & sesudah.

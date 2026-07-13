@@ -7,6 +7,7 @@ use axum::{
 };
 
 use crate::audit::{AuditAction, AuditLogRepository, ResourceType};
+use crate::customers::CustomerRepository;
 use crate::error::Result;
 use crate::products::ProductRepository;
 use crate::state::AppState;
@@ -19,9 +20,9 @@ use super::service;
 
 /// `tenant_id` selalu dari token (`AuthUser`), bukan dari URL — sama seperti
 /// products.
-pub async fn list_orders<TR, PR, OR, UR, AR>(
+pub async fn list_orders<TR, PR, OR, UR, AR, CR>(
     auth_user: AuthUser,
-    State(state): State<Arc<AppState<TR, PR, OR, UR, AR>>>,
+    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR>>>,
 ) -> Result<Json<Vec<Order>>>
 where
     TR: TenantRepository,
@@ -29,6 +30,7 @@ where
     OR: OrderRepository,
     UR: UserRepository,
     AR: AuditLogRepository,
+    CR: CustomerRepository,
 {
     let orders = service::list_orders(
         &state.orders,
@@ -39,9 +41,9 @@ where
     Ok(Json(orders))
 }
 
-pub async fn create_order<TR, PR, OR, UR, AR>(
+pub async fn create_order<TR, PR, OR, UR, AR, CR>(
     auth_user: AuthUser,
-    State(state): State<Arc<AppState<TR, PR, OR, UR, AR>>>,
+    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR>>>,
     Json(payload): Json<CreateOrderRequest>,
 ) -> Result<(StatusCode, Json<Order>)>
 where
@@ -50,6 +52,7 @@ where
     OR: OrderRepository,
     UR: UserRepository,
     AR: AuditLogRepository,
+    CR: CustomerRepository,
 {
     let actor = Actor::from(&auth_user);
     let order = service::create_order(
@@ -80,10 +83,10 @@ where
 /// Owner dan Admin boleh membatalkan order — Cashier tidak, supaya tidak menutupi
 /// transaksi yang sudah dibuat (mis. buat order lalu batalkan sendiri untuk
 /// menyembunyikan penjualan tunai).
-pub async fn cancel_order<TR, PR, OR, UR, AR>(
+pub async fn cancel_order<TR, PR, OR, UR, AR, CR>(
     ManagerUser(auth_user): ManagerUser,
     Path(order_id): Path<String>,
-    State(state): State<Arc<AppState<TR, PR, OR, UR, AR>>>,
+    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR>>>,
 ) -> Result<StatusCode>
 where
     TR: TenantRepository,
@@ -91,6 +94,7 @@ where
     OR: OrderRepository,
     UR: UserRepository,
     AR: AuditLogRepository,
+    CR: CustomerRepository,
 {
     let order = service::cancel_order(
         &state.orders,

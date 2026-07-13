@@ -7,6 +7,7 @@ use axum::{
 };
 
 use crate::audit::{AuditAction, AuditLogRepository, ResourceType};
+use crate::customers::CustomerRepository;
 use crate::error::Result;
 use crate::orders::OrderRepository;
 use crate::state::AppState;
@@ -20,9 +21,9 @@ use super::service;
 /// `tenant_id` TIDAK diambil dari path/URL — selalu dari token yang sudah
 /// terverifikasi (`AuthUser`). Jadi tidak ada "tenant_id yang salah" untuk
 /// dicoba, karena client tidak pernah diminta mengirimkannya.
-pub async fn list_products<TR, PR, OR, UR, AR>(
+pub async fn list_products<TR, PR, OR, UR, AR, CR>(
     auth_user: AuthUser,
-    State(state): State<Arc<AppState<TR, PR, OR, UR, AR>>>,
+    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR>>>,
 ) -> Result<Json<Vec<Product>>>
 where
     TR: TenantRepository,
@@ -30,6 +31,7 @@ where
     OR: OrderRepository,
     UR: UserRepository,
     AR: AuditLogRepository,
+    CR: CustomerRepository,
 {
     let products = service::list_products(
         &state.products,
@@ -42,9 +44,9 @@ where
 
 /// Owner dan Admin boleh menambah produk ke katalog — Cashier cukup
 /// bisa melihat & menjual, tidak mengelola stok/harga.
-pub async fn create_product<TR, PR, OR, UR, AR>(
+pub async fn create_product<TR, PR, OR, UR, AR, CR>(
     ManagerUser(auth_user): ManagerUser,
-    State(state): State<Arc<AppState<TR, PR, OR, UR, AR>>>,
+    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR>>>,
     Json(payload): Json<CreateProductRequest>,
 ) -> Result<(StatusCode, Json<Product>)>
 where
@@ -53,6 +55,7 @@ where
     OR: OrderRepository,
     UR: UserRepository,
     AR: AuditLogRepository,
+    CR: CustomerRepository,
 {
     let actor = Actor::from(&auth_user);
     let product = service::create_product(
@@ -80,10 +83,10 @@ where
 }
 
 /// Owner dan Admin boleh mengubah data produk (harga, stok, dst).
-pub async fn update_product<TR, PR, OR, UR, AR>(
+pub async fn update_product<TR, PR, OR, UR, AR, CR>(
     ManagerUser(auth_user): ManagerUser,
     Path(product_id): Path<String>,
-    State(state): State<Arc<AppState<TR, PR, OR, UR, AR>>>,
+    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR>>>,
     Json(payload): Json<UpdateProductRequest>,
 ) -> Result<Json<Product>>
 where
@@ -92,6 +95,7 @@ where
     OR: OrderRepository,
     UR: UserRepository,
     AR: AuditLogRepository,
+    CR: CustomerRepository,
 {
     let (product, changes) = service::update_product(
         &state.products,
@@ -121,10 +125,10 @@ where
 }
 
 /// Owner dan Admin boleh menghapus produk dari katalog.
-pub async fn delete_product<TR, PR, OR, UR, AR>(
+pub async fn delete_product<TR, PR, OR, UR, AR, CR>(
     ManagerUser(auth_user): ManagerUser,
     Path(product_id): Path<String>,
-    State(state): State<Arc<AppState<TR, PR, OR, UR, AR>>>,
+    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR>>>,
 ) -> Result<StatusCode>
 where
     TR: TenantRepository,
@@ -132,6 +136,7 @@ where
     OR: OrderRepository,
     UR: UserRepository,
     AR: AuditLogRepository,
+    CR: CustomerRepository,
 {
     let product = service::delete_product(
         &state.products,
