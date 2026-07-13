@@ -106,6 +106,28 @@ async fn create_product(
         .to_string()
 }
 
+/// Helper: bikin customer buat tenant pemilik `token`. Return id
+/// customer-nya, dipakai sebagai `customer_id` saat bikin order.
+async fn create_customer(app: &Router, token: &str, name: &str) -> String {
+    let payload = serde_json::json!({
+        "name": name,
+        "phone": format!("08{}", uuid::Uuid::new_v4().simple())
+            .chars()
+            .take(12)
+            .collect::<String>()
+    });
+    let response = app
+        .clone()
+        .oneshot(json_request("POST", "/customers", Some(token), payload))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    body_json(response).await["id"]
+        .as_str()
+        .unwrap()
+        .to_string()
+}
+
 /// Helper: owner (pemilik `owner_token`) invite user baru dengan `role`
 /// tertentu ("admin" atau "cashier"), lalu langsung login sebagai user itu.
 /// Return token-nya.
@@ -287,9 +309,10 @@ async fn order_uses_real_product_price_and_reduces_stock() {
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
     create_product(&app, &token, "SKU-001", 15_000.0, 10).await;
+    let customer_id = create_customer(&app, &token, "Budi").await;
 
     let payload = serde_json::json!({
-        "customer_name": "Budi",
+        "customer_id": customer_id,
         "items": [{ "sku": "SKU-001", "quantity": 3 }]
     });
     let response = app
@@ -316,9 +339,10 @@ async fn order_with_unknown_sku_returns_not_found() {
     let app = test_app();
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
+    let customer_id = create_customer(&app, &token, "Budi").await;
 
     let payload = serde_json::json!({
-        "customer_name": "Budi",
+        "customer_id": customer_id,
         "items": [{ "sku": "SKU-TIDAK-ADA", "quantity": 1 }]
     });
     let response = app
@@ -335,9 +359,10 @@ async fn order_fails_when_stock_insufficient() {
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
     create_product(&app, &token, "SKU-001", 15_000.0, 2).await;
+    let customer_id = create_customer(&app, &token, "Budi").await;
 
     let payload = serde_json::json!({
-        "customer_name": "Budi",
+        "customer_id": customer_id,
         "items": [{ "sku": "SKU-001", "quantity": 5 }]
     });
     let response = app
@@ -486,9 +511,10 @@ async fn cancel_order_restores_stock_and_removes_order() {
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
     create_product(&app, &token, "SKU-001", 15_000.0, 10).await;
+    let customer_id = create_customer(&app, &token, "Budi").await;
 
     let order_payload = serde_json::json!({
-        "customer_name": "Budi",
+        "customer_id": customer_id,
         "items": [{ "sku": "SKU-001", "quantity": 4 }]
     });
     let order_response = app
@@ -559,13 +585,15 @@ async fn product_and_order_record_who_created_them() {
     let product = body_json(product_response).await;
     assert_eq!(product["created_by"]["name"], "Budi Owner");
 
+    let customer_id = create_customer(&app, &token, "Pelanggan").await;
+
     let order_response = app
         .oneshot(json_request(
             "POST",
             "/orders",
             Some(&token),
             serde_json::json!({
-                "customer_name": "Pelanggan",
+                "customer_id": customer_id,
                 "items": [{ "sku": "SKU-001", "quantity": 1 }]
             }),
         ))
@@ -969,6 +997,7 @@ async fn cashier_can_view_products_and_create_orders() {
     let (owner_token, _tenant_id) =
         register(&app, "toko-budi", "owner@example.com").await;
     create_product(&app, &owner_token, "SKU-001", 15_000.0, 10).await;
+    let customer_id = create_customer(&app, &owner_token, "Pelanggan").await;
     let cashier_token =
         invite_and_login(&app, &owner_token, "kasir@example.com", "cashier")
             .await;
@@ -981,7 +1010,7 @@ async fn cashier_can_view_products_and_create_orders() {
     assert_eq!(list_response.status(), StatusCode::OK);
 
     let order_payload = serde_json::json!({
-        "customer_name": "Pelanggan",
+        "customer_id": customer_id,
         "items": [{ "sku": "SKU-001", "quantity": 1 }]
     });
     let order_response = app
@@ -1094,6 +1123,7 @@ async fn admin_can_cancel_order_but_cashier_cannot() {
     let (owner_token, _tenant_id) =
         register(&app, "toko-budi", "owner@example.com").await;
     create_product(&app, &owner_token, "SKU-001", 15_000.0, 10).await;
+    let customer_id = create_customer(&app, &owner_token, "Pelanggan").await;
     let admin_token =
         invite_and_login(&app, &owner_token, "admin@example.com", "admin")
             .await;
@@ -1102,7 +1132,7 @@ async fn admin_can_cancel_order_but_cashier_cannot() {
             .await;
 
     let order_payload = serde_json::json!({
-        "customer_name": "Pelanggan",
+        "customer_id": customer_id,
         "items": [{ "sku": "SKU-001", "quantity": 1 }]
     });
     let order_response = app
@@ -1324,4 +1354,41 @@ async fn customer_endpoints_require_authentication() {
 
     let response = app.oneshot(get_request("/customers", None)).await.unwrap();
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn order_with_unknown_customer_id_returns_not_found() {
+    let app = test_app();
+    let (token, _tenant_id) =
+        register(&app, "toko-budi", "budi@example.com").await;
+    create_product(&app, &token, "SKU-001", 15_000.0, 10).await;
+
+    let payload = serde_json::json!({
+        "customer_id": "cust-tidak-ada",
+        "items": [{ "sku": "SKU-001", "quantity": 1 }]
+    });
+    let response = app
+        .oneshot(json_request("POST", "/orders", Some(&token), payload))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn order_cannot_use_customer_from_another_tenant() {
+    let app = test_app();
+    let (token_a, _) = register(&app, "toko-a", "a@example.com").await;
+    let (token_b, _) = register(&app, "toko-b", "b@example.com").await;
+    create_product(&app, &token_a, "SKU-001", 15_000.0, 10).await;
+    let customer_id_b = create_customer(&app, &token_b, "Pelanggan B").await;
+
+    let payload = serde_json::json!({
+        "customer_id": customer_id_b,
+        "items": [{ "sku": "SKU-001", "quantity": 1 }]
+    });
+    let response = app
+        .oneshot(json_request("POST", "/orders", Some(&token_a), payload))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
 }

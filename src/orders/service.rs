@@ -1,3 +1,4 @@
+use crate::customers::CustomerRepository;
 use crate::error::{AppError, Result};
 use crate::products::ProductRepository;
 use crate::tenants::TenantRepository;
@@ -19,9 +20,10 @@ where
     Ok(orders.list_by_tenant(tenant_id).await)
 }
 
-pub async fn create_order<OR, PR, TR>(
+pub async fn create_order<OR, PR, CR, TR>(
     orders: &OR,
     products: &PR,
+    customers: &CR,
     tenants: &TR,
     tenant_id: &str,
     actor: Actor,
@@ -30,9 +32,20 @@ pub async fn create_order<OR, PR, TR>(
 where
     OR: OrderRepository,
     PR: ProductRepository,
+    CR: CustomerRepository,
     TR: TenantRepository,
 {
     ensure_tenant_exists(tenants, tenant_id).await?;
+
+    // Customer HARUS sudah terdaftar (lewat `/customers`) — sama seperti
+    // product, nama pelanggan tidak lagi diterima sebagai teks bebas dari
+    // client, supaya order selalu konsisten dengan data pelanggan yang
+    // tersimpan dan tidak ada order "nyasar" ke pelanggan yang salah ketik.
+    let customer = customers
+        .get(&payload.customer_id)
+        .await
+        .filter(|customer| customer.tenant_id == tenant_id)
+        .ok_or_else(|| AppError::NotFound("customer not found".into()))?;
 
     if payload.items.is_empty() {
         return Err(AppError::BadRequest(
@@ -96,7 +109,8 @@ where
     let order = Order {
         id: format!("order-{}", uuid::Uuid::new_v4().simple()),
         tenant_id: tenant_id.to_string(),
-        customer_name: payload.customer_name,
+        customer_id: customer.id.clone(),
+        customer_name: customer.name.clone(),
         items,
         total,
         created_by: actor,

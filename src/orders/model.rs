@@ -14,6 +14,13 @@ pub struct OrderItem {
 pub struct Order {
     pub id: String,
     pub tenant_id: String,
+    /// Referensi ke `Customer` yang sudah terdaftar — order TIDAK bisa lagi
+    /// dibuat dengan nama pelanggan bebas, harus pelanggan yang sudah ada
+    /// di `/customers`.
+    pub customer_id: String,
+    /// Snapshot nama pelanggan saat order dibuat — sama seperti nama/harga
+    /// produk di `OrderItem`, supaya order tetap bisa ditampilkan dengan
+    /// benar walau nama pelanggan diubah belakangan atau datanya dihapus.
     pub customer_name: String,
     pub items: Vec<OrderItem>,
     pub total: f64,
@@ -28,6 +35,7 @@ pub struct CreateOrderItemRequest {
 
 #[derive(Debug, Deserialize)]
 pub struct CreateOrderRequest {
-    pub customer_name: String,
+    /// Id customer yang sudah terdaftar (lihat `POST /customers`).
+    pub customer_id: String,
     pub items: Vec<CreateOrderItemRequest>,
 }

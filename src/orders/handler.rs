@@ -58,6 +58,7 @@ where
     let order = service::create_order(
         &state.orders,
         &state.products,
+        &state.customers,
         &state.tenants,
         &auth_user.tenant_id,
         actor.clone(),
