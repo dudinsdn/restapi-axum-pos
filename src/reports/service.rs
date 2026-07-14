@@ -66,9 +66,9 @@ where
     })
 }
 
-/// Order dihitung kalau `created_at`-nya ada di dalam [from, to] — batas
-/// yang tidak di-set dianggap tidak membatasi (`from` = sejak awal waktu,
-/// `to` = sampai sekarang).
+/// An order is counted if its `created_at` falls within [from, to] — an
+/// unset bound is treated as unrestricted (`from` = since the beginning
+/// of time, `to` = up to now).
 fn in_range(order: &Order, from: Option<u64>, to: Option<u64>) -> bool {
     if let Some(from) = from {
         if order.created_at < from {

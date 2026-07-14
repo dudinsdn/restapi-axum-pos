@@ -26,9 +26,9 @@ impl InMemoryUserRepository {
 
 impl UserRepository for InMemoryUserRepository {
     async fn create(&self, user: User) -> bool {
-        // Email harus unik secara global (dipakai sebagai identitas login),
-        // beda dengan slug/sku yang cuma unik per tenant. Cek + insert
-        // dalam satu write-lock supaya atomic.
+        // Email must be globally unique (used as the login identity),
+        // unlike slug/sku which are only unique per tenant. Check + insert
+        // in a single write-lock so it's atomic.
         let mut data = self.data.write();
 
         let email_taken =

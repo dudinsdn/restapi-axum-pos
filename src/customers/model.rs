@@ -7,8 +7,8 @@ pub struct Customer {
     pub id: String,
     pub tenant_id: String,
     pub name: String,
-    /// Dipakai sebagai identifier praktis di kasir (mis. cari pelanggan
-    /// lewat nomor HP). Unik per tenant — lihat `CustomerRepository::create`.
+    /// Used as a practical identifier at the register (e.g. looking up a
+    /// customer by phone number). Unique per tenant — see `CustomerRepository::create`.
     pub phone: String,
     pub email: Option<String>,
     pub address: Option<String>,
@@ -23,7 +23,7 @@ pub struct CreateCustomerRequest {
     pub address: Option<String>,
 }
 
-/// Update sebagian (semua field opsional).
+/// Partial update (all fields optional).
 #[derive(Debug, Deserialize)]
 pub struct UpdateCustomerRequest {
     pub name: Option<String>,

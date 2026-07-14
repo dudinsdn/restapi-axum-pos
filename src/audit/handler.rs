@@ -13,8 +13,8 @@ use crate::users::{ManagerUser, UserRepository};
 use super::model::AuditLogEntry;
 use super::repository::AuditLogRepository;
 
-/// Owner dan Admin boleh melihat audit log — Cashier tidak, supaya kasir
-/// tidak bisa memeriksa apakah aktivitasnya sendiri "ketahuan".
+/// Owner and Admin can view the audit log — Cashier cannot, so a cashier
+/// can't check whether their own activity has been "caught".
 pub async fn list_audit_logs<TR, PR, OR, UR, AR, CR>(
     ManagerUser(auth_user): ManagerUser,
     State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR>>>,

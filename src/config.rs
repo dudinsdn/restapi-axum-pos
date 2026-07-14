@@ -1,4 +1,4 @@
-/// Konfigurasi aplikasi, dibaca dari environment variable.
+/// Application configuration, read from environment variables.
 #[derive(Debug, Clone)]
 pub struct Config {
     pub port: u16,

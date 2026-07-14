@@ -6,7 +6,7 @@ use super::model::AuditLogEntry;
 
 pub trait AuditLogRepository: Send + Sync + 'static {
     fn record(&self, entry: AuditLogEntry) -> impl Future<Output = ()> + Send;
-    /// Terbaru duluan.
+    /// Newest first.
     fn list_by_tenant(
         &self,
         tenant_id: &str,
@@ -15,8 +15,8 @@ pub trait AuditLogRepository: Send + Sync + 'static {
 
 #[derive(Debug, Default)]
 pub struct InMemoryAuditLogRepository {
-    // Append-only log, jadi Vec biasa (bukan HashMap) sudah cukup dan
-    // otomatis menjaga urutan waktu penulisan.
+    // Append-only log, so a plain Vec (instead of a HashMap) is enough and
+    // automatically preserves write order.
     entries: RwLock<Vec<AuditLogEntry>>,
 }
 
@@ -32,11 +32,11 @@ impl AuditLogRepository for InMemoryAuditLogRepository {
     }
 
     async fn list_by_tenant(&self, tenant_id: &str) -> Vec<AuditLogEntry> {
-        // Reverse urutan insert (bukan sort by `at`) — `at` cuma presisi
-        // detik, jadi beberapa aksi berurutan cepat (create -> update ->
-        // delete) bisa dapat timestamp yang sama dan jadi ambigu kalau
-        // di-sort by waktu. Vec ini append-only, jadi urutan insert-nya
-        // sendiri sudah otomatis kronologis.
+        // Reverse the insert order (instead of sorting by `at`) — `at` only
+        // has second precision, so several fast sequential actions (create ->
+        // update -> delete) can end up with the same timestamp and become
+        // ambiguous if sorted by time. This Vec is append-only, so the insert
+        // order itself is already chronological.
         self.entries
             .read()
             .iter()

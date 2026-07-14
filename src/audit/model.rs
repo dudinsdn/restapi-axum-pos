@@ -18,9 +18,9 @@ pub enum ResourceType {
     Customer,
 }
 
-/// Satu field yang berubah saat update: nilai sebelum & sesudah.
-/// Disimpan terstruktur (bukan cuma dirangkai jadi teks) supaya client bisa
-/// menampilkannya dengan format apa pun tanpa perlu parsing string.
+/// A single field that changed during an update: value before & after.
+/// Stored in structured form (not just concatenated into text) so the client
+/// can display it in any format without needing to parse a string.
 #[derive(Debug, Clone, Serialize)]
 pub struct FieldChange {
     pub field: String,
@@ -28,9 +28,9 @@ pub struct FieldChange {
     pub new_value: String,
 }
 
-/// Satu baris riwayat: siapa, ngapain, terhadap apa, kapan. Ditulis sekali,
-/// tidak pernah diubah/dihapus — jadi tetap valid walau resource aslinya
-/// (product/order) sudah lama hilang dari database.
+/// A single history entry: who, did what, to what, when. Written once,
+/// never modified/deleted — so it stays valid even after the original
+/// resource (product/order) is long gone from the database.
 #[derive(Debug, Clone, Serialize)]
 pub struct AuditLogEntry {
     pub id: String,
@@ -39,13 +39,14 @@ pub struct AuditLogEntry {
     pub action: AuditAction,
     pub resource_type: ResourceType,
     pub resource_id: String,
-    /// Label ringkas biar enak dibaca (mis. nama produk atau nama pelanggan
-    /// order) tanpa perlu join balik ke resource yang mungkin sudah dihapus.
+    /// Short label for readability (e.g. product name or the order's
+    /// customer name) without needing to join back to a resource that may
+    /// have already been deleted.
     pub label: String,
-    /// Kosong untuk aksi `Created`/`Deleted`. Untuk `Updated`, berisi field
-    /// mana saja yang benar-benar berubah nilainya (field yang dikirim tapi
-    /// nilainya sama tidak dianggap perubahan).
+    /// Empty for `Created`/`Deleted` actions. For `Updated`, contains
+    /// whichever fields actually changed value (fields sent with the same
+    /// value are not considered a change).
     pub changes: Vec<FieldChange>,
-    /// Unix timestamp (detik).
+    /// Unix timestamp (seconds).
     pub at: u64,
 }

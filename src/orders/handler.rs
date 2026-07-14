@@ -18,8 +18,8 @@ use super::model::{CreateOrderRequest, Order};
 use super::repository::OrderRepository;
 use super::service;
 
-/// `tenant_id` selalu dari token (`AuthUser`), bukan dari URL — sama seperti
-/// products.
+/// `tenant_id` always comes from the token (`AuthUser`), never from the URL —
+/// same as products.
 pub async fn list_orders<TR, PR, OR, UR, AR, CR>(
     auth_user: AuthUser,
     State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR>>>,
@@ -81,9 +81,9 @@ where
     Ok((StatusCode::CREATED, Json(order)))
 }
 
-/// Owner dan Admin boleh membatalkan order — Cashier tidak, supaya tidak menutupi
-/// transaksi yang sudah dibuat (mis. buat order lalu batalkan sendiri untuk
-/// menyembunyikan penjualan tunai).
+/// Owner and Admin can cancel an order — Cashier cannot, so they can't cover up
+/// a transaction that was already made (e.g. creating an order and then
+/// cancelling it themselves to hide a cash sale).
 pub async fn cancel_order<TR, PR, OR, UR, AR, CR>(
     ManagerUser(auth_user): ManagerUser,
     Path(order_id): Path<String>,

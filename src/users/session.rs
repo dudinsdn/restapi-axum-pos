@@ -6,10 +6,10 @@ use parking_lot::RwLock;
 const MAX_LOGIN_ATTEMPTS: u32 = 5;
 const LOGIN_WINDOW: Duration = Duration::from_secs(15 * 60);
 
-/// Batasi percobaan login yang gagal per email, supaya tidak bisa
-/// di-brute-force. Sengaja di-key per email (bukan per-IP) — lebih
-/// sederhana dan tetap melindungi satu akun dari tebakan password
-/// bertubi-tubi, terlepas dari IP penyerangnya.
+/// Limit failed login attempts per email, so it can't be brute-forced.
+/// Intentionally keyed per email (not per-IP) — simpler and still
+/// protects a single account from repeated password guessing, regardless
+/// of the attacker's IP.
 #[derive(Default)]
 pub struct LoginRateLimiter {
     attempts: RwLock<HashMap<String, (u32, Instant)>>,
@@ -20,7 +20,7 @@ impl LoginRateLimiter {
         Self::default()
     }
 
-    /// `true` kalau masih boleh coba login.
+    /// `true` if login attempts are still allowed.
     pub fn check(&self, key: &str) -> bool {
         match self.attempts.read().get(key) {
             Some((count, started)) if started.elapsed() < LOGIN_WINDOW => {
@@ -47,11 +47,11 @@ impl LoginRateLimiter {
     }
 }
 
-/// Daftar token (via `jti`) yang sudah di-logout secara manual sebelum
-/// expired secara alami. Sederhana (in-memory `HashSet`, tidak ada
-/// pembersihan otomatis untuk entry yang sudah lewat masa berlaku token-nya)
-/// — cukup untuk skala sekarang, tapi kalau volume logout tinggi, pertimbangkan
-/// simpan revocation list ini di storage yang persist (mis. Redis dengan TTL).
+/// List of tokens (via `jti`) that have been manually logged out before
+/// naturally expiring. Simple (in-memory `HashSet`, no automatic cleanup
+/// for entries whose token has already expired) — good enough for the
+/// current scale, but if logout volume gets high, consider storing this
+/// revocation list in persistent storage (e.g. Redis with TTL).
 #[derive(Default)]
 pub struct TokenRevocationList {
     revoked: RwLock<HashSet<String>>,

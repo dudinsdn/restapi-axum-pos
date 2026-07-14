@@ -5,22 +5,23 @@ use parking_lot::RwLock;
 
 use super::model::Tenant;
 
-/// Kontrak storage untuk tenant. Method dideklarasikan lewat
-/// `-> impl Future<...> + Send` (bukan gula `async fn`) supaya bound
-/// `Send` ikut terjamin di level trait — penting karena trait ini dipakai
-/// generic di handler Axum, yang mensyaratkan future-nya `Send`.
+/// Storage contract for tenants. Methods are declared via
+/// `-> impl Future<...> + Send` (instead of `async fn` sugar) so the
+/// `Send` bound is guaranteed at the trait level — important because this
+/// trait is used generically in Axum handlers, which require its future
+/// to be `Send`.
 ///
-/// Implementasi in-memory sekarang tidak pernah benar-benar `.await`
-/// apa pun (murni operasi `RwLock` yang sinkron), tapi signature-nya
-/// sudah async dari awal. Jadi kalau nanti ganti ke Postgres/SQLite,
-/// cukup buat struct baru yang implement trait ini — handler dan
-/// service tidak perlu diubah sama sekali.
+/// The current in-memory implementation never actually `.await`s
+/// anything (it's purely synchronous `RwLock` operations), but the
+/// signature is already async from the start. So if it's swapped to
+/// Postgres/SQLite later, just build a new struct implementing this
+/// trait — the handler and service don't need to change at all.
 pub trait TenantRepository: Send + Sync + 'static {
     fn create(&self, tenant: Tenant) -> impl Future<Output = bool> + Send;
     fn get(&self, id: &str) -> impl Future<Output = Option<Tenant>> + Send;
     fn list(&self) -> impl Future<Output = Vec<Tenant>> + Send;
-    /// Dipakai untuk rollback kalau proses register gagal setelah tenant
-    /// terlanjur dibuat (mis. email sudah dipakai).
+    /// Used to roll back if the register process fails after the tenant
+    /// was already created (e.g. the email is already in use).
     fn delete(&self, id: &str) -> impl Future<Output = ()> + Send;
 }
 
@@ -37,10 +38,11 @@ impl InMemoryTenantRepository {
 
 impl TenantRepository for InMemoryTenantRepository {
     async fn create(&self, tenant: Tenant) -> bool {
-        // Satu write-lock untuk cek id + slug DAN insert sekaligus.
-        // Sengaja tidak dipecah jadi read-check lalu write-insert terpisah,
-        // karena itu membuka celah race condition: dua request bersamaan
-        // bisa lolos cek "belum ada" sebelum salah satunya sempat insert.
+        // A single write-lock to check id + slug AND insert at once.
+        // Intentionally not split into a separate read-check then
+        // write-insert, because that opens a race condition: two
+        // concurrent requests could both pass the "doesn't exist yet"
+        // check before either has a chance to insert.
         let mut data = self.data.write();
 
         let slug_taken =

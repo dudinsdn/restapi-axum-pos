@@ -16,15 +16,15 @@ use super::jwt::decode_token;
 use super::model::{Actor, Role};
 use super::repository::UserRepository;
 
-/// User yang sudah terverifikasi dari Bearer token di header `Authorization`.
-/// Dipakai sebagai parameter handler untuk endpoint yang wajib login.
+/// A verified user from the Bearer token in the `Authorization` header.
+/// Used as a handler parameter for endpoints that require login.
 pub struct AuthUser {
     pub user_id: String,
     pub tenant_id: String,
     pub name: String,
     pub role: Role,
-    /// `jti` token ini — dipakai handler `/auth/logout` untuk revoke
-    /// token yang sedang dipakai (bukan semua token milik user).
+    /// This token's `jti` — used by the `/auth/logout` handler to revoke
+    /// the token currently in use (not all of the user's tokens).
     pub token_id: String,
 }
 
@@ -84,15 +84,15 @@ where
     }
 }
 
-/// Sama seperti `AuthUser`, tapi hanya berhasil di-extract kalau role user
-/// itu `Owner`. Dipakai untuk endpoint yang cuma boleh dilakukan pemilik
-/// tenant (mis. mengundang user baru) — tinggal ganti parameter handler
-/// dari `auth_user: AuthUser` menjadi `OwnerUser(auth_user): OwnerUser`.
+/// Same as `AuthUser`, but only successfully extracts if the user's role
+/// is `Owner`. Used for endpoints only the tenant owner may perform (e.g.
+/// inviting a new user) — just change the handler parameter from
+/// `auth_user: AuthUser` to `OwnerUser(auth_user): OwnerUser`.
 ///
-/// Keuntungannya dibanding cek manual `if auth_user.role != Role::Owner`
-/// di dalam body handler: pengecekan jadi bagian dari *signature* handler,
-/// bukan langkah opsional yang bisa lupa ditulis atau terlewat saat
-/// endpoint baru ditambahkan / di-refactor.
+/// The advantage over a manual `if auth_user.role != Role::Owner` check
+/// inside the handler body: the check becomes part of the handler's
+/// *signature*, not an optional step that could be forgotten or missed
+/// when a new endpoint is added / refactored.
 pub struct OwnerUser(pub AuthUser);
 
 impl std::ops::Deref for OwnerUser {
@@ -138,11 +138,11 @@ where
     }
 }
 
-/// Sama seperti `AuthUser`, tapi hanya berhasil di-extract kalau role user
-/// itu `Owner` atau `Admin` — dua role yang mengelola operasional toko
-/// (katalog produk, pembatalan order, audit log). `Cashier` sengaja tidak
-/// termasuk: tugasnya cuma jualan (lihat produk, buat order), bukan
-/// mengelola toko.
+/// Same as `AuthUser`, but only successfully extracts if the user's role
+/// is `Owner` or `Admin` — the two roles that manage store operations
+/// (product catalog, order cancellation, audit log). `Cashier` is
+/// intentionally excluded: their job is only to sell (view products,
+/// create orders), not to manage the store.
 pub struct ManagerUser(pub AuthUser);
 
 impl std::ops::Deref for ManagerUser {

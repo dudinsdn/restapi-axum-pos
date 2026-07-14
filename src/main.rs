@@ -18,8 +18,8 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    // Config dibaca setelah tracing siap, supaya warning JWT_SECRET
-    // (kalau belum di-set) benar-benar muncul di log.
+    // Config is read after tracing is ready, so the JWT_SECRET warning
+    // (if it hasn't been set) actually shows up in the log.
     let config = Config::from_env();
 
     let state = AppState::new(

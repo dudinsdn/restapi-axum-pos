@@ -18,8 +18,8 @@ use super::model::{CreateCustomerRequest, Customer, UpdateCustomerRequest};
 use super::repository::CustomerRepository;
 use super::service;
 
-/// Semua role (Owner/Admin/Cashier) boleh lihat daftar pelanggan — kasir
-/// perlu cari pelanggan lama saat transaksi.
+/// All roles (Owner/Admin/Cashier) can view the customer list — a cashier
+/// needs to look up existing customers during a transaction.
 pub async fn list_customers<TR, PR, OR, UR, AR, CR>(
     auth_user: AuthUser,
     State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR>>>,
@@ -41,7 +41,7 @@ where
     Ok(Json(customers))
 }
 
-/// Semua role boleh lihat detail satu pelanggan.
+/// All roles can view a single customer's detail.
 pub async fn get_customer<TR, PR, OR, UR, AR, CR>(
     auth_user: AuthUser,
     Path(customer_id): Path<String>,
@@ -64,8 +64,8 @@ where
     Ok(Json(customer))
 }
 
-/// Semua role boleh daftarkan pelanggan baru — kasir sering mendaftarkan
-/// pelanggan langsung saat transaksi pertama mereka.
+/// All roles can register a new customer — a cashier often registers a
+/// customer on the spot during their first transaction.
 pub async fn create_customer<TR, PR, OR, UR, AR, CR>(
     auth_user: AuthUser,
     State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR>>>,
@@ -104,8 +104,8 @@ where
     Ok((StatusCode::CREATED, Json(customer)))
 }
 
-/// Semua role boleh perbarui data kontak pelanggan (mis. kasir memperbaiki
-/// nomor HP/alamat yang salah saat melayani pelanggan).
+/// All roles can update a customer's contact info (e.g. a cashier fixing a
+/// wrong phone number/address while serving the customer).
 pub async fn update_customer<TR, PR, OR, UR, AR, CR>(
     auth_user: AuthUser,
     Path(customer_id): Path<String>,
@@ -145,9 +145,9 @@ where
     Ok(Json(customer))
 }
 
-/// Hanya Owner dan Admin yang boleh menghapus data pelanggan — ini aksi
-/// destruktif/permanen, jadi tidak dibiarkan untuk Cashier walau mereka
-/// boleh membuat & mengedit data pelanggan sehari-hari.
+/// Only Owner and Admin can delete a customer — this is a destructive,
+/// permanent action, so it's not allowed for Cashier even though they can
+/// create & edit customer data day-to-day.
 pub async fn delete_customer<TR, PR, OR, UR, AR, CR>(
     ManagerUser(auth_user): ManagerUser,
     Path(customer_id): Path<String>,

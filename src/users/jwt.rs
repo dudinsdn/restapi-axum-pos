@@ -9,7 +9,7 @@ use crate::error::{AppError, Result};
 
 use super::model::{Role, User};
 
-const TOKEN_LIFETIME_SECS: u64 = 24 * 60 * 60; // 24 jam
+const TOKEN_LIFETIME_SECS: u64 = 24 * 60 * 60; // 24 hours
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
@@ -17,9 +17,9 @@ pub struct Claims {
     pub tenant_id: String,
     pub name: String,
     pub role: Role,
-    /// ID unik per token (bukan per user) — dipakai untuk revoke token
-    /// spesifik ini saat logout, tanpa mempengaruhi token lain milik user
-    /// yang sama (mis. kalau dia login dari 2 device berbeda).
+    /// Unique ID per token (not per user) — used to revoke this specific
+    /// token on logout, without affecting other tokens belonging to the
+    /// same user (e.g. if they're logged in from 2 different devices).
     pub jti: String,
     pub exp: usize,
 }

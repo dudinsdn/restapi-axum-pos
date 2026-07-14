@@ -39,10 +39,10 @@ where
 {
     ensure_tenant_exists(tenants, tenant_id).await?;
 
-    // Customer HARUS sudah terdaftar (lewat `/customers`) — sama seperti
-    // product, nama pelanggan tidak lagi diterima sebagai teks bebas dari
-    // client, supaya order selalu konsisten dengan data pelanggan yang
-    // tersimpan dan tidak ada order "nyasar" ke pelanggan yang salah ketik.
+    // The customer MUST already be registered (via `/customers`) — same as
+    // products, the customer name is no longer accepted as free-form text
+    // from the client, so orders always stay consistent with stored
+    // customer data and there's no order "misfiled" under a mistyped name.
     let customer = customers
         .get(&payload.customer_id)
         .await
@@ -55,8 +55,8 @@ where
         ));
     }
 
-    // (product_id, quantity) yang sudah berhasil di-reserve, dipakai untuk
-    // rollback kalau salah satu item berikutnya gagal di tengah jalan.
+    // (product_id, quantity) pairs successfully reserved so far, used to
+    // roll back if one of the next items fails partway through.
     let mut reserved: Vec<(String, i32)> = Vec::new();
     let mut items: Vec<OrderItem> = Vec::new();
 
@@ -69,9 +69,9 @@ where
             )));
         }
 
-        // Ambil data product yang sebenarnya dari repository — nama & harga
-        // TIDAK diterima dari input client, supaya order selalu konsisten
-        // dengan katalog product yang tersimpan.
+        // Fetch the actual product data from the repository — name & price
+        // are NOT accepted from client input, so orders always stay
+        // consistent with the stored product catalog.
         let Some(product) =
             products.get_by_sku(tenant_id, &requested.sku).await
         else {
@@ -144,14 +144,15 @@ async fn rollback<PR: ProductRepository>(
     }
 }
 
-/// Batalkan order: hapus dan kembalikan stock tiap item ke product
-/// masing-masing. Ini satu-satunya cara "mengubah" order — sengaja tidak
-/// ada endpoint untuk edit item/quantity order yang sudah dibuat, karena
-/// order adalah catatan historis (mirip nota transaksi), bukan draft yang
-/// pantas diedit bebas. Kalau pesanannya salah, batalkan lalu buat ulang.
+/// Cancel an order: delete it and return each item's stock to its
+/// respective product. This is the only way to "change" an order —
+/// there's intentionally no endpoint to edit the items/quantity of an
+/// order that's already been made, because an order is a historical
+/// record (like a transaction receipt), not a draft meant to be freely
+/// edited. If the order is wrong, cancel it and create a new one.
 ///
-/// Return order yang dibatalkan — dipakai caller untuk menulis audit log
-/// sebelum datanya hilang.
+/// Returns the cancelled order — used by the caller to write an audit log
+/// entry before its data is gone.
 pub async fn cancel_order<OR, PR>(
     orders: &OR,
     products: &PR,
@@ -169,9 +170,10 @@ where
         .ok_or_else(|| AppError::NotFound("order not found".into()))?;
 
     for item in &order.items {
-        // Kalau product-nya sudah kadung dihapus duluan, stock tidak perlu
-        // dikembalikan (tidak ada lagi tempat menyimpannya) — order tetap
-        // batal, reconciliation stock-nya cuma jadi no-op untuk item itu.
+        // If the product has already been deleted, its stock doesn't need
+        // to be returned (there's nowhere left to store it) — the order is
+        // still cancelled, the stock reconciliation just becomes a no-op
+        // for that item.
         if let Some(product) = products.get_by_sku(tenant_id, &item.sku).await {
             products.release_stock(&product.id, item.quantity).await;
         }

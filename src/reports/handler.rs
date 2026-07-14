@@ -17,11 +17,12 @@ use crate::users::{OwnerUser, UserRepository};
 use super::model::{ProfitReport, ProfitReportQuery};
 use super::service;
 
-/// Laporan profit (pendapatan dikurangi harga beli/HPP), total maupun per
-/// produk, dengan filter rentang waktu opsional lewat `?from=` / `?to=`
-/// (unix timestamp detik). HANYA owner yang boleh akses — beda dengan
-/// audit log yang masih boleh dilihat admin, laporan ini membuka margin
-/// keuntungan toko, jadi sengaja dibatasi lebih ketat lewat `OwnerUser`.
+/// Profit report (revenue minus cost of goods), both total and per
+/// product, with an optional time-range filter via `?from=` / `?to=`
+/// (unix timestamp seconds). ONLY the owner can access this — unlike the
+/// audit log which admins can still view, this report exposes the
+/// store's profit margin, so it's intentionally restricted more tightly
+/// via `OwnerUser`.
 pub async fn profit_report<TR, PR, OR, UR, AR, CR>(
     OwnerUser(auth_user): OwnerUser,
     State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR>>>,

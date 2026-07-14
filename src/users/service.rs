@@ -46,9 +46,10 @@ where
     };
 
     if !users.create(user.clone()).await {
-        // Rollback: tenant sudah kadung dibuat tapi email-nya sudah dipakai
-        // orang lain. Untuk storage in-memory ini cukup, tapi begitu pindah
-        // ke database sungguhan, seluruh proses ini idealnya satu transaksi.
+        // Rollback: the tenant has already been created but the email is
+        // already in use by someone else. For in-memory storage this is
+        // enough, but once moved to a real database, this whole process
+        // should ideally be a single transaction.
         tenants.delete(&tenant.id).await;
         return Err(AppError::Conflict(format!(
             "email '{email}' already registered"
@@ -74,8 +75,9 @@ where
         ));
     }
 
-    // Pesan error SENGAJA sama persis baik email tidak ditemukan maupun
-    // password salah, supaya tidak bocorkan email mana yang terdaftar.
+    // The error message is INTENTIONALLY identical whether the email
+    // isn't found or the password is wrong, so as not to leak which
+    // emails are registered.
     let invalid = || AppError::Unauthorized("invalid email or password".into());
 
     let user = match users.get_by_email(&email).await {

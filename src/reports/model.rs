@@ -1,15 +1,15 @@
 use serde::{Deserialize, Serialize};
 
-/// Query param untuk filter rentang waktu laporan. Keduanya opsional dan
-/// berupa unix timestamp (detik) — konsisten dengan `AuditLogEntry::at`,
-/// bukan format tanggal supaya tidak perlu tambah dependency date/time.
+/// Query params for filtering the report's time range. Both are optional
+/// and use unix timestamp (seconds) — consistent with `AuditLogEntry::at`,
+/// not a date format, so no date/time dependency needs to be added.
 #[derive(Debug, Deserialize)]
 pub struct ProfitReportQuery {
     pub from: Option<u64>,
     pub to: Option<u64>,
 }
 
-/// Rincian kontribusi profit satu produk dalam rentang laporan.
+/// Breakdown of one product's profit contribution within the report range.
 #[derive(Debug, Clone, Serialize)]
 pub struct ProductProfit {
     pub sku: String,
@@ -20,22 +20,22 @@ pub struct ProductProfit {
     pub profit: f64,
 }
 
-/// Laporan profit (pendapatan dikurangi HPP/harga beli) untuk satu tenant,
-/// dihitung dari order yang sudah dibuat. Order yang dibatalkan tidak ikut
-/// terhitung karena `cancel_order` MENGHAPUS order-nya (lihat
-/// `orders::service::cancel_order`) — jadi setiap order yang masih ada di
-/// storage sudah pasti transaksi yang valid, tidak perlu filter status.
+/// Profit report (revenue minus cost of goods) for one tenant, computed
+/// from orders that have been created. Cancelled orders aren't counted
+/// because `cancel_order` DELETES the order (see
+/// `orders::service::cancel_order`) — so any order still in storage is
+/// guaranteed to be a valid transaction, no status filter needed.
 #[derive(Debug, Serialize)]
 pub struct ProfitReport {
-    /// Filter yang benar-benar dipakai untuk laporan ini (`null` kalau
-    /// tidak difilter dari sisi itu) — supaya response self-descriptive.
+    /// The filter actually used for this report (`null` if not filtered
+    /// on that side) — so the response is self-descriptive.
     pub from: Option<u64>,
     pub to: Option<u64>,
     pub order_count: usize,
     pub total_revenue: f64,
     pub total_cost: f64,
     pub total_profit: f64,
-    /// Diurutkan dari kontribusi profit terbesar, supaya owner langsung
-    /// lihat produk paling menguntungkan tanpa perlu sort sendiri.
+    /// Sorted by largest profit contribution, so the owner immediately
+    /// sees the most profitable products without needing to sort themselves.
     pub by_product: Vec<ProductProfit>,
 }

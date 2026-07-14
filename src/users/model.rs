@@ -1,12 +1,12 @@
 use serde::{Deserialize, Serialize};
 
-/// Tiga tingkat akses:
-/// - `Owner`: pemilik tenant, dibuat otomatis saat `register`. Bisa
-///   melakukan apa saja, termasuk mengundang `Admin`/`Cashier` baru.
-/// - `Admin`: mengelola operasional toko sehari-hari — atur katalog produk,
-///   batalkan order, lihat audit log. Tidak bisa mengundang user lain.
-/// - `Cashier`: kasir, cuma boleh lihat produk & buat order (transaksi
-///   jualan). Tidak bisa mengubah katalog, membatalkan order, atau melihat
+/// Three access levels:
+/// - `Owner`: the tenant's owner, created automatically during `register`.
+///   Can do anything, including inviting new `Admin`/`Cashier` users.
+/// - `Admin`: manages day-to-day store operations — manage the product
+///   catalog, cancel orders, view the audit log. Cannot invite other users.
+/// - `Cashier`: a cashier, can only view products & create orders (sales
+///   transactions). Cannot modify the catalog, cancel orders, or view the
 ///   audit log.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -27,19 +27,19 @@ pub struct User {
     pub role: Role,
 }
 
-/// Identitas ringkas seorang user, ditempelkan ke resource (product, order,
-/// dst) dan ke audit log — supaya selalu jelas siapa yang melakukan apa,
-/// bahkan setelah resource aslinya dihapus.
+/// A brief identity for a user, attached to a resource (product, order,
+/// etc) and to the audit log — so it's always clear who did what, even
+/// after the original resource has been deleted.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Actor {
     pub user_id: String,
     pub name: String,
 }
 
-/// Registrasi sekaligus membuat tenant baru + user pertama sebagai Owner.
-/// Ini satu-satunya cara membuat tenant sekarang — tidak ada lagi endpoint
-/// publik untuk create tenant secara terpisah, supaya tidak ada celah
-/// "siapa saja bisa bikin tenant atas nama siapa saja".
+/// Registration simultaneously creates a new tenant + the first user as
+/// Owner. This is now the only way to create a tenant — there's no more
+/// separate public endpoint to create a tenant, so there's no loophole of
+/// "anyone can create a tenant on anyone's behalf".
 #[derive(Debug, Deserialize)]
 pub struct RegisterRequest {
     pub tenant_name: String,
@@ -56,11 +56,11 @@ pub struct LoginRequest {
     pub password: String,
 }
 
-/// Owner mengundang user baru (Admin atau Cashier) ke tenant-nya sendiri.
-/// `tenant_id` TIDAK diterima dari body — selalu diambil dari tenant milik
-/// pemanggil (`AuthUser`), supaya owner tidak bisa iseng invite ke tenant
-/// lain. `role` divalidasi di service: tidak boleh `Owner` (cuma ada satu
-/// owner per tenant, dibuat lewat `register`).
+/// The owner invites a new user (Admin or Cashier) into their own tenant.
+/// `tenant_id` is NOT accepted from the body — always taken from the
+/// caller's own tenant (`AuthUser`), so an owner can't casually invite
+/// into another tenant. `role` is validated in the service: it cannot be
+/// `Owner` (there's only one owner per tenant, created via `register`).
 #[derive(Debug, Deserialize)]
 pub struct InviteStaffRequest {
     pub name: String,

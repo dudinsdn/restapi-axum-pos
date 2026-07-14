@@ -59,7 +59,7 @@ async fn body_json(response: axum::response::Response) -> Value {
     serde_json::from_slice(&bytes).unwrap()
 }
 
-/// Helper: register tenant + owner baru, return (token, tenant_id).
+/// Helper: register a new tenant + owner, returns (token, tenant_id).
 async fn register(app: &Router, slug: &str, email: &str) -> (String, String) {
     let payload = serde_json::json!({
         "tenant_name": "Toko Test",
@@ -81,8 +81,8 @@ async fn register(app: &Router, slug: &str, email: &str) -> (String, String) {
     (token, tenant_id)
 }
 
-/// Helper: bikin product buat tenant pemilik `token` — tidak ada tenant_id
-/// yang dikirim, murni ditentukan dari token. Return id product-nya.
+/// Helper: create a product for the tenant owning `token` — no tenant_id
+/// is sent, it's determined purely from the token. Returns the product's id.
 async fn create_product(
     app: &Router,
     token: &str,
@@ -110,8 +110,8 @@ async fn create_product(
         .to_string()
 }
 
-/// Helper: bikin customer buat tenant pemilik `token`. Return id
-/// customer-nya, dipakai sebagai `customer_id` saat bikin order.
+/// Helper: create a customer for the tenant owning `token`. Returns the
+/// customer's id, used as `customer_id` when creating an order.
 async fn create_customer(app: &Router, token: &str, name: &str) -> String {
     let payload = serde_json::json!({
         "name": name,
@@ -132,9 +132,9 @@ async fn create_customer(app: &Router, token: &str, name: &str) -> String {
         .to_string()
 }
 
-/// Helper: owner (pemilik `owner_token`) invite user baru dengan `role`
-/// tertentu ("admin" atau "cashier"), lalu langsung login sebagai user itu.
-/// Return token-nya.
+/// Helper: the owner (holder of `owner_token`) invites a new user with a
+/// given `role` ("admin" or "cashier"), then immediately logs in as that
+/// user. Returns its token.
 async fn invite_and_login(
     app: &Router,
     owner_token: &str,
@@ -272,10 +272,10 @@ async fn tenant_data_is_isolated_by_token_not_by_request() {
 
     create_product(&app, &token_a, "SKU-A", 10_000.0, 6_000.0, 5).await;
 
-    // Tidak ada tenant_id yang bisa "ditebak" atau "dipalsukan" dari sisi
-    // client — endpoint-nya sama persis (`/products`), tapi token tenant B
-    // TIDAK PERNAH bisa melihat product tenant A karena scoping-nya
-    // sepenuhnya berasal dari token, bukan dari request.
+    // There's no tenant_id that can be "guessed" or "spoofed" from the
+    // client side — the endpoint is exactly the same (`/products`), but
+    // tenant B's token can NEVER see tenant A's product because the
+    // scoping comes entirely from the token, not from the request.
     let response = app
         .oneshot(get_request("/products", Some(&token_b)))
         .await
@@ -456,7 +456,7 @@ async fn update_product_changes_fields() {
     let updated = body_json(response).await;
     assert_eq!(updated["price"], 20_000.0);
     assert_eq!(updated["stock"], 50);
-    // sku & name yang tidak dikirim harus tetap sama seperti sebelumnya.
+    // sku & name that weren't sent must remain unchanged.
     assert_eq!(updated["sku"], "SKU-001");
 }
 
@@ -534,7 +534,7 @@ async fn cancel_order_restores_stock_and_removes_order() {
         .unwrap()
         .to_string();
 
-    // Stock sekarang 6 (10 - 4) sebelum dibatalkan.
+    // Stock is now 6 (10 - 4) before cancellation.
     let mid_products = app
         .clone()
         .oneshot(get_request("/products", Some(&token)))
@@ -556,7 +556,7 @@ async fn cancel_order_restores_stock_and_removes_order() {
         .unwrap();
     assert_eq!(cancel_response.status(), StatusCode::NO_CONTENT);
 
-    // Stock kembali ke 10 setelah dibatalkan.
+    // Stock returns to 10 after cancellation.
     let final_products = app
         .clone()
         .oneshot(get_request("/products", Some(&token)))
@@ -564,7 +564,7 @@ async fn cancel_order_restores_stock_and_removes_order() {
         .unwrap();
     assert_eq!(body_json(final_products).await[0]["stock"], 10);
 
-    // Order sudah tidak ada lagi di list.
+    // The order is no longer in the list.
     let orders_response = app
         .oneshot(get_request("/orders", Some(&token)))
         .await
@@ -654,7 +654,7 @@ async fn audit_log_records_create_update_and_delete() {
     let logs = body_json(logs_response).await;
     let logs = logs.as_array().unwrap();
 
-    // Terbaru duluan: delete, update, create.
+    // Newest first: delete, update, create.
     assert_eq!(logs.len(), 3);
     assert_eq!(logs[0]["action"], "deleted");
     assert_eq!(logs[1]["action"], "updated");
@@ -706,7 +706,7 @@ async fn audit_log_records_field_level_changes_on_update() {
     let logs = body_json(logs_response).await;
     let logs = logs.as_array().unwrap();
 
-    // logs[0] = update (terbaru), logs[1] = create.
+    // logs[0] = update (newest), logs[1] = create.
     let changes = logs[0]["changes"].as_array().unwrap();
     assert_eq!(changes.len(), 2);
 
@@ -724,7 +724,7 @@ async fn audit_log_records_field_level_changes_on_update() {
     assert_eq!(stock_change["old_value"], "5");
     assert_eq!(stock_change["new_value"], "20");
 
-    // name tidak dikirim di payload -> tidak boleh muncul di changes.
+    // name wasn't sent in the payload -> must not appear in changes.
     assert!(changes.iter().all(|c| c["field"] != "name"));
 }
 
@@ -736,7 +736,7 @@ async fn noop_update_does_not_write_audit_entry() {
     let product_id =
         create_product(&app, &token, "SKU-001", 10_000.0, 6_000.0, 5).await;
 
-    // Kirim price yang NILAINYA SAMA PERSIS dengan yang sekarang.
+    // Send a price whose VALUE IS EXACTLY THE SAME as the current one.
     let response = app
         .clone()
         .oneshot(json_request(
@@ -754,8 +754,8 @@ async fn noop_update_does_not_write_audit_entry() {
         .await
         .unwrap();
     let logs = body_json(logs_response).await;
-    // Cuma entry "created" — tidak ada "updated" tambahan karena tidak ada
-    // field yang benar-benar berubah.
+    // Only the "created" entry — no additional "updated" entry because no
+    // field actually changed.
     assert_eq!(logs.as_array().unwrap().len(), 1);
 }
 
@@ -767,7 +767,7 @@ async fn audit_log_records_which_fields_changed() {
     let product_id =
         create_product(&app, &token, "SKU-001", 10_000.0, 6_000.0, 5).await;
 
-    // Cuma ubah price & stock, name tidak dikirim -> tidak boleh muncul di
+    // Only change price & stock, name isn't sent -> must not appear in
     // changes.
     app.clone()
         .oneshot(json_request(
@@ -804,7 +804,7 @@ async fn audit_log_records_which_fields_changed() {
     assert_eq!(stock_change["old_value"], "5");
     assert_eq!(stock_change["new_value"], "8");
 
-    // name tidak dikirim di payload -> tidak dianggap "berubah".
+    // name wasn't sent in the payload -> not considered "changed".
     assert!(changes.iter().all(|c| c["field"] != "name"));
 }
 
@@ -816,8 +816,8 @@ async fn no_op_update_does_not_create_audit_entry() {
     let product_id =
         create_product(&app, &token, "SKU-001", 10_000.0, 6_000.0, 5).await;
 
-    // Kirim nilai yang PERSIS SAMA seperti sekarang -> tidak ada perubahan
-    // nyata, jadi tidak boleh nambah entry audit baru.
+    // Send a value that's EXACTLY THE SAME as the current one -> no real
+    // change, so no new audit entry should be added.
     app.clone()
         .oneshot(json_request(
             "PATCH",
@@ -833,7 +833,7 @@ async fn no_op_update_does_not_create_audit_entry() {
         .await
         .unwrap();
     let logs = body_json(logs_response).await;
-    // Cuma entry "created" dari create_product tadi, tidak ada "updated".
+    // Only the "created" entry from create_product earlier, no "updated".
     assert_eq!(logs.as_array().unwrap().len(), 1);
     assert_eq!(logs[0]["action"], "created");
 }
@@ -1437,7 +1437,7 @@ async fn update_product_can_change_cost_price_and_it_is_audited() {
     assert_eq!(response.status(), StatusCode::OK);
     let updated = body_json(response).await;
     assert_eq!(updated["cost_price"], 7_000.0);
-    // price tidak dikirim di payload -> harus tetap seperti semula.
+    // price wasn't sent in the payload -> must remain unchanged.
     assert_eq!(updated["price"], 10_000.0);
 
     let logs_response = app
@@ -1480,7 +1480,7 @@ async fn order_snapshots_cost_price_so_later_changes_dont_affect_history() {
     let order = body_json(order_response).await;
     assert_eq!(order["items"][0]["unit_cost"], 12_000.0);
 
-    // Ubah cost_price produk SETELAH order dibuat.
+    // Change the product's cost_price AFTER the order is created.
     app.clone()
         .oneshot(json_request(
             "PATCH",
@@ -1491,8 +1491,8 @@ async fn order_snapshots_cost_price_so_later_changes_dont_affect_history() {
         .await
         .unwrap();
 
-    // Laporan profit harus tetap pakai cost_price LAMA (12_000.0) yang
-    // di-snapshot saat order dibuat, bukan yang baru (18_000.0).
+    // The profit report must still use the OLD cost_price (12_000.0) that
+    // was snapshotted when the order was created, not the new one (18_000.0).
     let report_response = app
         .oneshot(get_request("/tenants/me/reports/profit", Some(&token)))
         .await
@@ -1547,7 +1547,7 @@ async fn profit_report_computes_totals_and_per_product_breakdown() {
 
     let by_product = report["by_product"].as_array().unwrap();
     assert_eq!(by_product.len(), 2);
-    // Diurutkan dari profit terbesar -> SKU-B (60_000) duluan.
+    // Sorted by largest profit -> SKU-B (60_000) first.
     assert_eq!(by_product[0]["sku"], "SKU-B");
     assert_eq!(by_product[0]["quantity_sold"], 2);
     assert_eq!(by_product[0]["revenue"], 100_000.0);
@@ -1570,8 +1570,8 @@ async fn profit_report_is_owner_only() {
         invite_and_login(&app, &owner_token, "kasir@example.com", "cashier")
             .await;
 
-    // Admin BOLEH kelola katalog produk & lihat audit log, tapi laporan
-    // profit sengaja lebih ketat -> tetap 403 untuk admin.
+    // Admin CAN manage the product catalog & view the audit log, but the
+    // profit report is intentionally stricter -> still 403 for admin.
     let admin_response = app
         .clone()
         .oneshot(get_request(
@@ -1627,7 +1627,7 @@ async fn profit_report_can_be_filtered_by_date_range() {
     assert_eq!(response.status(), StatusCode::CREATED);
     let after = now_unix();
 
-    // Rentang yang mencakup waktu order dibuat -> order ikut terhitung.
+    // A range that includes the order's creation time -> the order is counted.
     let in_range_response = app
         .clone()
         .oneshot(get_request(
@@ -1639,7 +1639,7 @@ async fn profit_report_can_be_filtered_by_date_range() {
     let in_range = body_json(in_range_response).await;
     assert_eq!(in_range["order_count"], 1);
 
-    // Rentang yang seluruhnya di masa depan -> order tidak ikut terhitung.
+    // A range entirely in the future -> the order is not counted.
     let future = after + 100_000;
     let out_of_range_response = app
         .oneshot(get_request(

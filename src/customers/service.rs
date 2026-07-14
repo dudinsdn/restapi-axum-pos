@@ -121,8 +121,8 @@ pub async fn update_customer<CR: CustomerRepository>(
             customer.address = Some(address);
         }
     }
-    // `created_by` sengaja tidak berubah, sama seperti `Product` — tetap
-    // mencatat siapa yang PERTAMA KALI bikin datanya.
+    // `created_by` is intentionally never changed, same as `Product` — it
+    // always records who created the data FIRST.
 
     if !changes.is_empty() {
         customers.update(customer.clone()).await;
@@ -131,8 +131,8 @@ pub async fn update_customer<CR: CustomerRepository>(
     Ok((customer, changes))
 }
 
-/// Return customer yang dihapus (bukan cuma unit) — dipakai caller untuk
-/// menulis audit log dengan nama customer itu sebelum datanya hilang.
+/// Returns the deleted customer (not just unit) — used by the caller to
+/// write an audit log entry with the customer's name before its data is gone.
 pub async fn delete_customer<CR: CustomerRepository>(
     customers: &CR,
     tenant_id: &str,
@@ -144,10 +144,10 @@ pub async fn delete_customer<CR: CustomerRepository>(
     Ok(customer)
 }
 
-/// Ambil customer by id DAN pastikan milik tenant yang meminta. Kalau
-/// customer tidak ada ATAU milik tenant lain, sama-sama return `NotFound`
-/// (bukan `Forbidden`) — supaya tidak bocorkan ke client apakah id itu
-/// sebenarnya ada tapi kepunyaan tenant lain.
+/// Fetch a customer by id AND ensure it belongs to the requesting tenant.
+/// If the customer doesn't exist OR belongs to another tenant, both cases
+/// return `NotFound` (not `Forbidden`) — so as not to leak to the client
+/// whether that id actually exists but belongs to a different tenant.
 async fn fetch_owned_customer<CR: CustomerRepository>(
     customers: &CR,
     tenant_id: &str,

@@ -14,8 +14,8 @@ use super::model::Tenant;
 use super::repository::TenantRepository;
 use super::service;
 
-/// Info tenant milik user yang sedang login. Tidak ada lagi endpoint
-/// "list semua tenant" — setiap user cuma boleh lihat tenant-nya sendiri.
+/// Info of the tenant belonging to the currently logged-in user. There's
+/// no more "list all tenants" endpoint — each user can only view their own tenant.
 pub async fn get_me<TR, PR, OR, UR, AR, CR>(
     auth_user: AuthUser,
     State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR>>>,

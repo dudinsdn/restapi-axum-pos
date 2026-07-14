@@ -18,9 +18,9 @@ use super::model::{CreateProductRequest, Product, UpdateProductRequest};
 use super::repository::ProductRepository;
 use super::service;
 
-/// `tenant_id` TIDAK diambil dari path/URL — selalu dari token yang sudah
-/// terverifikasi (`AuthUser`). Jadi tidak ada "tenant_id yang salah" untuk
-/// dicoba, karena client tidak pernah diminta mengirimkannya.
+/// `tenant_id` is NOT taken from the path/URL — always from the already
+/// verified token (`AuthUser`). So there's no "wrong tenant_id" to try,
+/// because the client is never asked to send it.
 pub async fn list_products<TR, PR, OR, UR, AR, CR>(
     auth_user: AuthUser,
     State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR>>>,
@@ -42,8 +42,8 @@ where
     Ok(Json(products))
 }
 
-/// Owner dan Admin boleh menambah produk ke katalog — Cashier cukup
-/// bisa melihat & menjual, tidak mengelola stok/harga.
+/// Owner and Admin can add products to the catalog — Cashier can only
+/// view & sell, not manage stock/price.
 pub async fn create_product<TR, PR, OR, UR, AR, CR>(
     ManagerUser(auth_user): ManagerUser,
     State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR>>>,
@@ -82,7 +82,7 @@ where
     Ok((StatusCode::CREATED, Json(product)))
 }
 
-/// Owner dan Admin boleh mengubah data produk (harga, stok, dst).
+/// Owner and Admin can update product data (price, stock, etc).
 pub async fn update_product<TR, PR, OR, UR, AR, CR>(
     ManagerUser(auth_user): ManagerUser,
     Path(product_id): Path<String>,
@@ -105,8 +105,8 @@ where
     )
     .await?;
 
-    // Tidak ada field yang benar-benar berubah nilainya (mis. client kirim
-    // value yang sama persis) -> tidak perlu tulis entry audit "kosong".
+    // No field actually changed value (e.g. client sent the exact same
+    // value) -> no need to write an "empty" audit entry.
     if !changes.is_empty() {
         crate::audit::service::record(
             &state.audit,
@@ -124,7 +124,7 @@ where
     Ok(Json(product))
 }
 
-/// Owner dan Admin boleh menghapus produk dari katalog.
+/// Owner and Admin can delete a product from the catalog.
 pub async fn delete_product<TR, PR, OR, UR, AR, CR>(
     ManagerUser(auth_user): ManagerUser,
     Path(product_id): Path<String>,

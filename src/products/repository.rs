@@ -11,32 +11,32 @@ pub trait ProductRepository: Send + Sync + 'static {
         &self,
         tenant_id: &str,
     ) -> impl Future<Output = Vec<Product>> + Send;
-    /// Cari produk milik satu tenant berdasarkan SKU. Dipakai order untuk
-    /// mengambil nama & harga yang sebenarnya, bukan dari input client.
+    /// Look up a product belonging to one tenant by SKU. Used by orders to
+    /// fetch the actual name & price, not from client input.
     fn get_by_sku(
         &self,
         tenant_id: &str,
         sku: &str,
     ) -> impl Future<Output = Option<Product>> + Send;
-    /// Cari produk berdasarkan id-nya sendiri (lintas tenant) — pemanggil
-    /// WAJIB cek `product.tenant_id` sendiri sebelum dipakai, karena method
-    /// ini sengaja tidak scoped per tenant (dipakai lookup awal sebelum tahu
-    /// siapa pemiliknya).
+    /// Look up a product by its own id (across tenants) — the caller MUST
+    /// check `product.tenant_id` themselves before using it, because this
+    /// method is intentionally not scoped per tenant (used for an initial
+    /// lookup before knowing who owns it).
     fn get(&self, id: &str) -> impl Future<Output = Option<Product>> + Send;
-    /// Timpa product yang sudah ada. Return `false` kalau id-nya belum ada
-    /// sama sekali (harusnya tidak terjadi kalau dipanggil setelah `get`).
+    /// Overwrite an existing product. Returns `false` if the id doesn't
+    /// exist at all (shouldn't happen if called after `get`).
     fn update(&self, product: Product) -> impl Future<Output = bool> + Send;
-    /// Hapus product. Return `false` kalau id-nya tidak ada.
+    /// Delete a product. Returns `false` if the id doesn't exist.
     fn delete(&self, id: &str) -> impl Future<Output = bool> + Send;
-    /// Kurangi stock atomically. Return `false` kalau produk tidak ada
-    /// atau stock tidak cukup — tidak ada perubahan terjadi di kasus itu.
+    /// Reduce stock atomically. Returns `false` if the product doesn't
+    /// exist or stock isn't sufficient — no change occurs in that case.
     fn reserve_stock(
         &self,
         product_id: &str,
         quantity: i32,
     ) -> impl Future<Output = bool> + Send;
-    /// Kembalikan stock yang sudah di-reserve (dipakai untuk rollback order
-    /// yang gagal, atau saat order dibatalkan).
+    /// Return stock that was already reserved (used to roll back a failed
+    /// order, or when an order is cancelled).
     fn release_stock(
         &self,
         product_id: &str,
@@ -57,8 +57,8 @@ impl InMemoryProductRepository {
 
 impl ProductRepository for InMemoryProductRepository {
     async fn create(&self, product: Product) -> bool {
-        // Satu write-lock untuk cek id + sku (scoped per tenant) DAN insert
-        // sekaligus, supaya atomic — sama seperti perbaikan slug di tenant.
+        // A single write-lock to check id + sku (scoped per tenant) AND
+        // insert at once, so it's atomic — same as the slug fix in tenants.
         let mut data = self.data.write();
 
         let sku_taken = data.values().any(|existing| {

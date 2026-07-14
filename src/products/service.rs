@@ -103,13 +103,13 @@ pub async fn update_product<PR: ProductRepository>(
             product.stock = stock;
         }
     }
-    // `created_by` sengaja tidak berubah — itu tetap mencatat siapa yang
-    // PERTAMA KALI bikin produknya. Siapa yang mengedit belakangan tercatat
-    // di audit log, bukan menimpa `created_by`.
+    // `created_by` is intentionally never changed — it always records who
+    // created the product FIRST. Who edited it later is recorded in the
+    // audit log, not by overwriting `created_by`.
 
-    // Kalau tidak ada satu pun field yang benar-benar berubah nilainya
-    // (mis. client kirim value yang sama persis), tidak perlu tulis ulang
-    // ke storage — cukup return apa adanya tanpa `changes`.
+    // If not a single field actually changed value (e.g. client sent the
+    // exact same value), no need to write back to storage — just return as
+    // is with empty `changes`.
     if !changes.is_empty() {
         products.update(product.clone()).await;
     }
@@ -117,8 +117,8 @@ pub async fn update_product<PR: ProductRepository>(
     Ok((product, changes))
 }
 
-/// Return product yang dihapus (bukan cuma unit) — dipakai caller untuk
-/// menulis audit log dengan nama/sku produk itu sebelum datanya hilang.
+/// Returns the deleted product (not just unit) — used by the caller to
+/// write an audit log entry with the product's name/sku before its data is gone.
 pub async fn delete_product<PR: ProductRepository>(
     products: &PR,
     tenant_id: &str,
@@ -129,10 +129,10 @@ pub async fn delete_product<PR: ProductRepository>(
     Ok(product)
 }
 
-/// Ambil product by id DAN pastikan milik tenant yang meminta. Kalau
-/// product tidak ada ATAU milik tenant lain, sama-sama return `NotFound`
-/// (bukan `Forbidden`) — supaya tidak bocorkan ke client apakah id itu
-/// sebenarnya ada tapi kepunyaan tenant lain.
+/// Fetch a product by id AND ensure it belongs to the requesting tenant.
+/// If the product doesn't exist OR belongs to another tenant, both cases
+/// return `NotFound` (not `Forbidden`) — so as not to leak to the client
+/// whether that id actually exists but belongs to a different tenant.
 async fn fetch_owned_product<PR: ProductRepository>(
     products: &PR,
     tenant_id: &str,

@@ -8,9 +8,10 @@ pub struct OrderItem {
     pub name: String,
     pub quantity: i32,
     pub unit_price: f64,
-    /// Snapshot `cost_price` produk pada saat order dibuat — sama alasannya
-    /// dengan `unit_price`: kalau `cost_price` produk diubah belakangan,
-    /// laporan profit atas order LAMA tidak boleh ikut berubah.
+    /// Snapshot of the product's `cost_price` at the time the order was
+    /// created — same reasoning as `unit_price`: if the product's
+    /// `cost_price` is changed later, the profit report for OLD orders
+    /// must not change along with it.
     pub unit_cost: f64,
 }
 
@@ -18,19 +19,20 @@ pub struct OrderItem {
 pub struct Order {
     pub id: String,
     pub tenant_id: String,
-    /// Referensi ke `Customer` yang sudah terdaftar — order TIDAK bisa lagi
-    /// dibuat dengan nama pelanggan bebas, harus pelanggan yang sudah ada
-    /// di `/customers`.
+    /// Reference to an already-registered `Customer` — orders can NO LONGER
+    /// be created with a free-form customer name; it must be an existing
+    /// customer in `/customers`.
     pub customer_id: String,
-    /// Snapshot nama pelanggan saat order dibuat — sama seperti nama/harga
-    /// produk di `OrderItem`, supaya order tetap bisa ditampilkan dengan
-    /// benar walau nama pelanggan diubah belakangan atau datanya dihapus.
+    /// Snapshot of the customer's name at the time the order was created —
+    /// same as the product name/price in `OrderItem`, so the order can still
+    /// be displayed correctly even if the customer's name is changed later
+    /// or the data is deleted.
     pub customer_name: String,
     pub items: Vec<OrderItem>,
     pub total: f64,
     pub created_by: Actor,
-    /// Unix timestamp (detik) saat order dibuat — dipakai laporan profit
-    /// untuk filter rentang waktu (`from`/`to`).
+    /// Unix timestamp (seconds) when the order was created — used by the
+    /// profit report to filter a time range (`from`/`to`).
     pub created_at: u64,
 }
 
@@ -42,7 +44,7 @@ pub struct CreateOrderItemRequest {
 
 #[derive(Debug, Deserialize)]
 pub struct CreateOrderRequest {
-    /// Id customer yang sudah terdaftar (lihat `POST /customers`).
+    /// Id of an already-registered customer (see `POST /customers`).
     pub customer_id: String,
     pub items: Vec<CreateOrderItemRequest>,
 }

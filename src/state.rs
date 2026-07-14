@@ -7,13 +7,13 @@ use crate::products::ProductRepository;
 use crate::tenants::TenantRepository;
 use crate::users::{LoginRateLimiter, TokenRevocationList, UserRepository};
 
-/// State aplikasi, generic atas tipe repository tiap domain.
+/// Application state, generic over each domain's repository type.
 ///
-/// Static dispatch (bukan `Arc<dyn Trait>`) supaya tidak ada overhead
-/// dynamic dispatch / boxing future — semua di-monomorphize saat compile.
-/// Kalau nanti ganti backend (mis. Postgres), cukup buat impl baru dari
-/// trait yang sama dan ganti tipe konkret di `main.rs`, tanpa menyentuh
-/// handler atau service.
+/// Static dispatch (instead of `Arc<dyn Trait>`) so there's no dynamic
+/// dispatch / future-boxing overhead — everything is monomorphized at
+/// compile time. If the backend is swapped later (e.g. Postgres), just
+/// build a new impl of the same trait and change the concrete type in
+/// `main.rs`, without touching the handler or service.
 pub struct AppState<TR, PR, OR, UR, AR, CR> {
     pub tenants: TR,
     pub products: PR,

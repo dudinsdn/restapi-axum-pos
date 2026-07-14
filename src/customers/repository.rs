@@ -11,22 +11,21 @@ pub trait CustomerRepository: Send + Sync + 'static {
         &self,
         tenant_id: &str,
     ) -> impl Future<Output = Vec<Customer>> + Send;
-    /// Cari customer berdasarkan id-nya sendiri (lintas tenant) —
-    /// pemanggil WAJIB cek `customer.tenant_id` sendiri sebelum dipakai,
-    /// sama seperti pola yang sama di `ProductRepository::get`.
+    /// Look up a customer by its own id (across tenants) — the caller MUST
+    /// check `customer.tenant_id` themselves before using it, same pattern
+    /// as in `ProductRepository::get`.
     fn get(&self, id: &str) -> impl Future<Output = Option<Customer>> + Send;
-    /// Cari customer milik satu tenant berdasarkan nomor HP. Dipakai untuk
-    /// cek keunikan sebelum create/update, mirip `ProductRepository::get_by_sku`.
+    /// Look up a customer belonging to one tenant by phone number. Used to
+    /// check uniqueness before create/update, similar to `ProductRepository::get_by_sku`.
     fn get_by_phone(
         &self,
         tenant_id: &str,
         phone: &str,
     ) -> impl Future<Output = Option<Customer>> + Send;
-    /// Timpa customer yang sudah ada. Return `false` kalau id-nya belum
-    /// ada sama sekali (harusnya tidak terjadi kalau dipanggil setelah
-    /// `get`).
+    /// Overwrite an existing customer. Returns `false` if the id doesn't
+    /// exist at all (shouldn't happen if called after `get`).
     fn update(&self, customer: Customer) -> impl Future<Output = bool> + Send;
-    /// Hapus customer. Return `false` kalau id-nya tidak ada.
+    /// Delete a customer. Returns `false` if the id doesn't exist.
     fn delete(&self, id: &str) -> impl Future<Output = bool> + Send;
 }
 
@@ -43,8 +42,8 @@ impl InMemoryCustomerRepository {
 
 impl CustomerRepository for InMemoryCustomerRepository {
     async fn create(&self, customer: Customer) -> bool {
-        // Satu write-lock untuk cek id + nomor HP (scoped per tenant) DAN
-        // insert sekaligus, supaya atomic — sama seperti pengecekan sku di
+        // A single write-lock to check id + phone number (scoped per tenant)
+        // AND insert at once, so it's atomic — same as the sku check in
         // ProductRepository.
         let mut data = self.data.write();
 
