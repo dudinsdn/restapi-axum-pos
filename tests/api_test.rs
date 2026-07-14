@@ -1044,6 +1044,47 @@ async fn cashier_can_view_products_and_create_orders() {
 }
 
 #[tokio::test]
+async fn cost_price_is_hidden_from_cashier_but_visible_to_owner_and_admin() {
+    let app = test_app();
+    let (owner_token, _tenant_id) =
+        register(&app, "toko-budi", "owner@example.com").await;
+    create_product(&app, &owner_token, "SKU-001", 15_000.0, 9_000.0, 10).await;
+    let admin_token =
+        invite_and_login(&app, &owner_token, "admin@example.com", "admin")
+            .await;
+    let cashier_token =
+        invite_and_login(&app, &owner_token, "kasir@example.com", "cashier")
+            .await;
+
+    let owner_products = body_json(
+        app.clone()
+            .oneshot(get_request("/products", Some(&owner_token)))
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(owner_products[0]["cost_price"], 9_000.0);
+
+    let admin_products = body_json(
+        app.clone()
+            .oneshot(get_request("/products", Some(&admin_token)))
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(admin_products[0]["cost_price"], 9_000.0);
+
+    let cashier_products = body_json(
+        app.oneshot(get_request("/products", Some(&cashier_token)))
+            .await
+            .unwrap(),
+    )
+    .await;
+    // The field should be omitted entirely, not sent as `null`.
+    assert!(cashier_products[0].get("cost_price").is_none());
+}
+
+#[tokio::test]
 async fn admin_can_manage_product_catalog_but_cashier_cannot() {
     let app = test_app();
     let (owner_token, _tenant_id) =

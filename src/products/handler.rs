@@ -12,9 +12,11 @@ use crate::error::Result;
 use crate::orders::OrderRepository;
 use crate::state::AppState;
 use crate::tenants::TenantRepository;
-use crate::users::{Actor, AuthUser, ManagerUser, UserRepository};
+use crate::users::{Actor, AuthUser, ManagerUser, Role, UserRepository};
 
-use super::model::{CreateProductRequest, Product, UpdateProductRequest};
+use super::model::{
+    CreateProductRequest, ProductResponse, UpdateProductRequest,
+};
 use super::repository::ProductRepository;
 use super::service;
 
@@ -24,7 +26,7 @@ use super::service;
 pub async fn list_products<TR, PR, OR, UR, AR, CR>(
     auth_user: AuthUser,
     State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR>>>,
-) -> Result<Json<Vec<Product>>>
+) -> Result<Json<Vec<ProductResponse>>>
 where
     TR: TenantRepository,
     PR: ProductRepository,
@@ -39,7 +41,17 @@ where
         &auth_user.tenant_id,
     )
     .await?;
-    Ok(Json(products))
+
+    let can_see_cost_price =
+        matches!(auth_user.role, Role::Owner | Role::Admin);
+    let response = products
+        .into_iter()
+        .map(|product| {
+            ProductResponse::from_product(product, can_see_cost_price)
+        })
+        .collect();
+
+    Ok(Json(response))
 }
 
 /// Owner and Admin can add products to the catalog — Cashier can only
@@ -48,7 +60,7 @@ pub async fn create_product<TR, PR, OR, UR, AR, CR>(
     ManagerUser(auth_user): ManagerUser,
     State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR>>>,
     Json(payload): Json<CreateProductRequest>,
-) -> Result<(StatusCode, Json<Product>)>
+) -> Result<(StatusCode, Json<ProductResponse>)>
 where
     TR: TenantRepository,
     PR: ProductRepository,
@@ -79,7 +91,12 @@ where
     )
     .await;
 
-    Ok((StatusCode::CREATED, Json(product)))
+    // `ManagerUser` guarantees Owner or Admin, so cost_price is always
+    // included here.
+    Ok((
+        StatusCode::CREATED,
+        Json(ProductResponse::from_product(product, true)),
+    ))
 }
 
 /// Owner and Admin can update product data (price, stock, etc).
@@ -88,7 +105,7 @@ pub async fn update_product<TR, PR, OR, UR, AR, CR>(
     Path(product_id): Path<String>,
     State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR>>>,
     Json(payload): Json<UpdateProductRequest>,
-) -> Result<Json<Product>>
+) -> Result<Json<ProductResponse>>
 where
     TR: TenantRepository,
     PR: ProductRepository,
@@ -121,7 +138,9 @@ where
         .await;
     }
 
-    Ok(Json(product))
+    // `ManagerUser` guarantees Owner or Admin, so cost_price is always
+    // included here.
+    Ok(Json(ProductResponse::from_product(product, true)))
 }
 
 /// Owner and Admin can delete a product from the catalog.
