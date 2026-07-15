@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::users::Actor;
 
@@ -21,7 +21,12 @@ pub enum ResourceType {
 /// A single field that changed during an update: value before & after.
 /// Stored in structured form (not just concatenated into text) so the client
 /// can display it in any format without needing to parse a string.
-#[derive(Debug, Clone, Serialize)]
+///
+/// Derives `Deserialize` (unlike `AuditAction`/`ResourceType`, which are
+/// stored as plain `TEXT` with a manual mapping in `audit::postgres`)
+/// because `Vec<FieldChange>` round-trips through a JSONB column as-is —
+/// see `PgAuditLogRepository`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FieldChange {
     pub field: String,
     pub old_value: String,
