@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::audit::AuditLogRepository;
 use crate::customers::CustomerRepository;
-use crate::orders::OrderRepository;
+use crate::orders::{IdempotencyStore, OrderRepository};
 use crate::products::ProductRepository;
 use crate::tenants::TenantRepository;
 use crate::users::{LoginRateLimiter, TokenRevocationList, UserRepository};
@@ -24,6 +24,7 @@ pub struct AppState<TR, PR, OR, UR, AR, CR> {
     pub jwt_secret: String,
     pub login_rate_limiter: Arc<LoginRateLimiter>,
     pub revoked_tokens: Arc<TokenRevocationList>,
+    pub idempotency_store: Arc<IdempotencyStore>,
 }
 
 impl<TR, PR, OR, UR, AR, CR> AppState<TR, PR, OR, UR, AR, CR>
@@ -54,6 +55,7 @@ where
             jwt_secret,
             login_rate_limiter: Arc::new(LoginRateLimiter::new()),
             revoked_tokens: Arc::new(TokenRevocationList::new()),
+            idempotency_store: Arc::new(IdempotencyStore::new()),
         })
     }
 }

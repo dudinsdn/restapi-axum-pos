@@ -1,6 +1,7 @@
 pub mod app;
 pub mod config;
 pub mod error;
+pub mod pagination;
 pub mod state;
 
 pub mod audit;

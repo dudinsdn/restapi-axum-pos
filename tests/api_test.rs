@@ -54,6 +54,26 @@ fn get_request(uri: &str, token: Option<&str>) -> Request<Body> {
     builder.body(Body::empty()).unwrap()
 }
 
+fn json_request_with_header(
+    method: &str,
+    uri: &str,
+    token: Option<&str>,
+    extra_header: (&str, &str),
+    body: Value,
+) -> Request<Body> {
+    let mut builder = Request::builder()
+        .method(method)
+        .uri(uri)
+        .header("content-type", "application/json")
+        .header(extra_header.0, extra_header.1);
+
+    if let Some(token) = token {
+        builder = builder.header("authorization", format!("Bearer {token}"));
+    }
+
+    builder.body(Body::from(body.to_string())).unwrap()
+}
+
 async fn body_json(response: axum::response::Response) -> Value {
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     serde_json::from_slice(&bytes).unwrap()
@@ -1776,6 +1796,305 @@ async fn profit_report_can_be_filtered_by_date_range() {
     let out_of_range = body_json(out_of_range_response).await;
     assert_eq!(out_of_range["order_count"], 0);
     assert_eq!(out_of_range["total_profit"], 0);
+}
+
+#[tokio::test]
+async fn create_product_rejects_negative_price() {
+    let app = test_app();
+    let (token, _tenant_id) =
+        register(&app, "toko-budi", "budi@example.com").await;
+
+    let response = app
+        .oneshot(json_request(
+            "POST",
+            "/products",
+            Some(&token),
+            serde_json::json!({
+                "name": "Produk A",
+                "sku": "SKU-001",
+                "price": -1000,
+                "cost_price": 500,
+                "stock": 5
+            }),
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn create_product_rejects_negative_stock() {
+    let app = test_app();
+    let (token, _tenant_id) =
+        register(&app, "toko-budi", "budi@example.com").await;
+
+    let response = app
+        .oneshot(json_request(
+            "POST",
+            "/products",
+            Some(&token),
+            serde_json::json!({
+                "name": "Produk A",
+                "sku": "SKU-001",
+                "price": 1000,
+                "cost_price": 500,
+                "stock": -1
+            }),
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn create_product_rejects_empty_name_and_sku() {
+    let app = test_app();
+    let (token, _tenant_id) =
+        register(&app, "toko-budi", "budi@example.com").await;
+
+    let empty_name = app
+        .clone()
+        .oneshot(json_request(
+            "POST",
+            "/products",
+            Some(&token),
+            serde_json::json!({
+                "name": "   ",
+                "sku": "SKU-001",
+                "price": 1000,
+                "cost_price": 500,
+                "stock": 5
+            }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(empty_name.status(), StatusCode::BAD_REQUEST);
+
+    let empty_sku = app
+        .oneshot(json_request(
+            "POST",
+            "/products",
+            Some(&token),
+            serde_json::json!({
+                "name": "Produk A",
+                "sku": "",
+                "price": 1000,
+                "cost_price": 500,
+                "stock": 5
+            }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(empty_sku.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn update_product_rejects_negative_cost_price() {
+    let app = test_app();
+    let (token, _tenant_id) =
+        register(&app, "toko-budi", "budi@example.com").await;
+    let product_id =
+        create_product(&app, &token, "SKU-001", 10_000, 6_000, 5).await;
+
+    let response = app
+        .oneshot(json_request(
+            "PATCH",
+            &format!("/products/{product_id}"),
+            Some(&token),
+            serde_json::json!({ "cost_price": -100 }),
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn create_order_rejects_zero_or_negative_quantity() {
+    let app = test_app();
+    let (token, _tenant_id) =
+        register(&app, "toko-budi", "budi@example.com").await;
+    create_product(&app, &token, "SKU-001", 10_000, 6_000, 5).await;
+    let customer_id = create_customer(&app, &token, "Budi").await;
+
+    let response = app
+        .oneshot(json_request(
+            "POST",
+            "/orders",
+            Some(&token),
+            serde_json::json!({
+                "customer_id": customer_id,
+                "items": [{ "sku": "SKU-001", "quantity": 0 }]
+            }),
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn create_customer_rejects_empty_name_and_phone() {
+    let app = test_app();
+    let (token, _tenant_id) =
+        register(&app, "toko-budi", "budi@example.com").await;
+
+    let response = app
+        .oneshot(json_request(
+            "POST",
+            "/customers",
+            Some(&token),
+            serde_json::json!({ "name": "  ", "phone": "" }),
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn list_products_is_paginated_via_limit_and_offset() {
+    let app = test_app();
+    let (token, _tenant_id) =
+        register(&app, "toko-budi", "budi@example.com").await;
+    for i in 0..5 {
+        create_product(&app, &token, &format!("SKU-{i:03}"), 10_000, 5_000, 10)
+            .await;
+    }
+
+    let response = app
+        .clone()
+        .oneshot(get_request("/products?limit=2&offset=1", Some(&token)))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let total_count = response
+        .headers()
+        .get("x-total-count")
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.parse::<usize>().ok());
+    assert_eq!(total_count, Some(5));
+
+    let page = body_json(response).await;
+    let page = page.as_array().unwrap();
+    assert_eq!(page.len(), 2);
+    // Offset 1 skips SKU-000, so the page starts at SKU-001.
+    assert_eq!(page[0]["sku"], "SKU-001");
+    assert_eq!(page[1]["sku"], "SKU-002");
+
+    // Default (no query params) still returns everything and the header.
+    let default_response = app
+        .oneshot(get_request("/products", Some(&token)))
+        .await
+        .unwrap();
+    let default_total_count = default_response
+        .headers()
+        .get("x-total-count")
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.parse::<usize>().ok());
+    assert_eq!(default_total_count, Some(5));
+    let default_page = body_json(default_response).await;
+    assert_eq!(default_page.as_array().unwrap().len(), 5);
+}
+
+#[tokio::test]
+async fn create_order_with_same_idempotency_key_returns_same_order() {
+    let app = test_app();
+    let (token, _tenant_id) =
+        register(&app, "toko-budi", "budi@example.com").await;
+    create_product(&app, &token, "SKU-001", 10_000, 6_000, 5).await;
+    let customer_id = create_customer(&app, &token, "Budi").await;
+
+    let payload = serde_json::json!({
+        "customer_id": customer_id,
+        "items": [{ "sku": "SKU-001", "quantity": 2 }]
+    });
+
+    let first_response = app
+        .clone()
+        .oneshot(json_request_with_header(
+            "POST",
+            "/orders",
+            Some(&token),
+            ("Idempotency-Key", "order-key-1"),
+            payload.clone(),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(first_response.status(), StatusCode::CREATED);
+    let first_order = body_json(first_response).await;
+
+    // Retry with the SAME key (e.g. a client retry after a timeout) must
+    // return the SAME order, not create a second one.
+    let second_response = app
+        .clone()
+        .oneshot(json_request_with_header(
+            "POST",
+            "/orders",
+            Some(&token),
+            ("Idempotency-Key", "order-key-1"),
+            payload,
+        ))
+        .await
+        .unwrap();
+    assert_eq!(second_response.status(), StatusCode::CREATED);
+    let second_order = body_json(second_response).await;
+    assert_eq!(first_order["id"], second_order["id"]);
+
+    // Only ONE order should actually exist, and stock should only have been
+    // reserved once (5 - 2 = 3, not 5 - 4 = 1).
+    let orders_response = app
+        .clone()
+        .oneshot(get_request("/orders", Some(&token)))
+        .await
+        .unwrap();
+    let orders = body_json(orders_response).await;
+    assert_eq!(orders.as_array().unwrap().len(), 1);
+
+    let products_response = app
+        .oneshot(get_request("/products", Some(&token)))
+        .await
+        .unwrap();
+    let products = body_json(products_response).await;
+    assert_eq!(products[0]["stock"], 3);
+}
+
+#[tokio::test]
+async fn create_order_without_idempotency_key_creates_separate_orders() {
+    let app = test_app();
+    let (token, _tenant_id) =
+        register(&app, "toko-budi", "budi@example.com").await;
+    create_product(&app, &token, "SKU-001", 10_000, 6_000, 5).await;
+    let customer_id = create_customer(&app, &token, "Budi").await;
+
+    let payload = serde_json::json!({
+        "customer_id": customer_id,
+        "items": [{ "sku": "SKU-001", "quantity": 1 }]
+    });
+
+    for _ in 0..2 {
+        let response = app
+            .clone()
+            .oneshot(json_request(
+                "POST",
+                "/orders",
+                Some(&token),
+                payload.clone(),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+    }
+
+    let orders_response = app
+        .oneshot(get_request("/orders", Some(&token)))
+        .await
+        .unwrap();
+    let orders = body_json(orders_response).await;
+    // No idempotency key was sent -> each request is a genuinely new order.
+    assert_eq!(orders.as_array().unwrap().len(), 2);
 }
 
 fn now_unix() -> u64 {

@@ -2,13 +2,15 @@ use std::sync::Arc;
 
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
+    response::Response,
 };
 
 use crate::audit::{AuditAction, AuditLogRepository, ResourceType};
 use crate::error::Result;
 use crate::orders::OrderRepository;
+use crate::pagination::{PaginationQuery, paginated_response};
 use crate::products::ProductRepository;
 use crate::state::AppState;
 use crate::tenants::TenantRepository;
@@ -20,10 +22,14 @@ use super::service;
 
 /// All roles (Owner/Admin/Cashier) can view the customer list — a cashier
 /// needs to look up existing customers during a transaction.
+///
+/// Paginated via `?limit=&offset=` (see `pagination` module) — the total
+/// count before slicing is returned in the `X-Total-Count` header.
 pub async fn list_customers<TR, PR, OR, UR, AR, CR>(
     auth_user: AuthUser,
     State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR>>>,
-) -> Result<Json<Vec<Customer>>>
+    Query(pagination): Query<PaginationQuery>,
+) -> Result<Response>
 where
     TR: TenantRepository,
     PR: ProductRepository,
@@ -38,7 +44,7 @@ where
         &auth_user.tenant_id,
     )
     .await?;
-    Ok(Json(customers))
+    Ok(paginated_response(customers, &pagination))
 }
 
 /// All roles can view a single customer's detail.

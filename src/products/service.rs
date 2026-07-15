@@ -31,6 +31,11 @@ where
     TR: TenantRepository,
 {
     ensure_tenant_exists(tenants, tenant_id).await?;
+    validate_name(&payload.name)?;
+    validate_sku(&payload.sku)?;
+    validate_price("price", payload.price)?;
+    validate_price("cost_price", payload.cost_price)?;
+    validate_stock(payload.stock)?;
 
     let product = Product {
         id: format!("prod-{}", uuid::Uuid::new_v4().simple()),
@@ -64,6 +69,7 @@ pub async fn update_product<PR: ProductRepository>(
     let mut changes = Vec::new();
 
     if let Some(name) = payload.name {
+        validate_name(&name)?;
         if name != product.name {
             changes.push(FieldChange {
                 field: "name".to_string(),
@@ -74,6 +80,7 @@ pub async fn update_product<PR: ProductRepository>(
         }
     }
     if let Some(price) = payload.price {
+        validate_price("price", price)?;
         if price != product.price {
             changes.push(FieldChange {
                 field: "price".to_string(),
@@ -84,6 +91,7 @@ pub async fn update_product<PR: ProductRepository>(
         }
     }
     if let Some(cost_price) = payload.cost_price {
+        validate_price("cost_price", cost_price)?;
         if cost_price != product.cost_price {
             changes.push(FieldChange {
                 field: "cost_price".to_string(),
@@ -94,6 +102,7 @@ pub async fn update_product<PR: ProductRepository>(
         }
     }
     if let Some(stock) = payload.stock {
+        validate_stock(stock)?;
         if stock != product.stock {
             changes.push(FieldChange {
                 field: "stock".to_string(),
@@ -151,6 +160,38 @@ async fn ensure_tenant_exists<TR: TenantRepository>(
 ) -> Result<()> {
     if tenants.get(tenant_id).await.is_none() {
         return Err(AppError::NotFound("tenant not found".into()));
+    }
+    Ok(())
+}
+
+fn validate_name(name: &str) -> Result<()> {
+    if name.trim().is_empty() {
+        return Err(AppError::BadRequest("name must not be empty".into()));
+    }
+    Ok(())
+}
+
+fn validate_sku(sku: &str) -> Result<()> {
+    if sku.trim().is_empty() {
+        return Err(AppError::BadRequest("sku must not be empty".into()));
+    }
+    Ok(())
+}
+
+/// `field_name` is only used in the error message, so the same check works
+/// for both `price` and `cost_price` without duplicating the logic.
+fn validate_price(field_name: &str, value: i64) -> Result<()> {
+    if value < 0 {
+        return Err(AppError::BadRequest(format!(
+            "{field_name} must not be negative"
+        )));
+    }
+    Ok(())
+}
+
+fn validate_stock(stock: i32) -> Result<()> {
+    if stock < 0 {
+        return Err(AppError::BadRequest("stock must not be negative".into()));
     }
     Ok(())
 }

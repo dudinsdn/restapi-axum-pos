@@ -2,14 +2,16 @@ use std::sync::Arc;
 
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
+    response::Response,
 };
 
 use crate::audit::{AuditAction, AuditLogRepository, ResourceType};
 use crate::customers::CustomerRepository;
 use crate::error::Result;
 use crate::orders::OrderRepository;
+use crate::pagination::{PaginationQuery, paginated_response};
 use crate::state::AppState;
 use crate::tenants::TenantRepository;
 use crate::users::{Actor, AuthUser, ManagerUser, Role, UserRepository};
@@ -23,10 +25,14 @@ use super::service;
 /// `tenant_id` is NOT taken from the path/URL — always from the already
 /// verified token (`AuthUser`). So there's no "wrong tenant_id" to try,
 /// because the client is never asked to send it.
+///
+/// Paginated via `?limit=&offset=` (see `pagination` module) — the total
+/// count before slicing is returned in the `X-Total-Count` header.
 pub async fn list_products<TR, PR, OR, UR, AR, CR>(
     auth_user: AuthUser,
     State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR>>>,
-) -> Result<Json<Vec<ProductResponse>>>
+    Query(pagination): Query<PaginationQuery>,
+) -> Result<Response>
 where
     TR: TenantRepository,
     PR: ProductRepository,
@@ -44,14 +50,14 @@ where
 
     let can_see_cost_price =
         matches!(auth_user.role, Role::Owner | Role::Admin);
-    let response = products
+    let response: Vec<ProductResponse> = products
         .into_iter()
         .map(|product| {
             ProductResponse::from_product(product, can_see_cost_price)
         })
         .collect();
 
-    Ok(Json(response))
+    Ok(paginated_response(response, &pagination))
 }
 
 /// Owner and Admin can add products to the catalog — Cashier can only

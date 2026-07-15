@@ -2,13 +2,15 @@ use std::sync::Arc;
 
 use axum::{
     Json,
-    extract::{Path, State},
-    http::StatusCode,
+    extract::{Path, Query, State},
+    http::{HeaderMap, StatusCode},
+    response::Response,
 };
 
 use crate::audit::{AuditAction, AuditLogRepository, ResourceType};
 use crate::customers::CustomerRepository;
 use crate::error::Result;
+use crate::pagination::{PaginationQuery, paginated_response};
 use crate::products::ProductRepository;
 use crate::state::AppState;
 use crate::tenants::TenantRepository;
@@ -20,10 +22,14 @@ use super::service;
 
 /// `tenant_id` always comes from the token (`AuthUser`), never from the URL —
 /// same as products.
+///
+/// Paginated via `?limit=&offset=` (see `pagination` module) — the total
+/// count before slicing is returned in the `X-Total-Count` header.
 pub async fn list_orders<TR, PR, OR, UR, AR, CR>(
     auth_user: AuthUser,
     State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR>>>,
-) -> Result<Json<Vec<OrderResponse>>>
+    Query(pagination): Query<PaginationQuery>,
+) -> Result<Response>
 where
     TR: TenantRepository,
     PR: ProductRepository,
@@ -40,17 +46,28 @@ where
     .await?;
 
     let can_see_unit_cost = matches!(auth_user.role, Role::Owner | Role::Admin);
-    let response = orders
+    let response: Vec<OrderResponse> = orders
         .into_iter()
         .map(|order| OrderResponse::from_order(order, can_see_unit_cost))
         .collect();
 
-    Ok(Json(response))
+    Ok(paginated_response(response, &pagination))
 }
 
+/// Accepts an optional `Idempotency-Key` header. If a request with the same
+/// key (scoped per tenant) already succeeded, the SAME order is returned
+/// instead of creating a duplicate one — protects against a client retrying
+/// after a timeout, or a cashier double-tapping "submit", from double
+/// charging a customer and double-reserving stock.
+///
+/// Note: two truly concurrent requests with the same brand-new key can
+/// still both slip through (the check-then-create isn't atomic) — see
+/// `IdempotencyStore` for the tradeoffs of the current in-memory
+/// implementation.
 pub async fn create_order<TR, PR, OR, UR, AR, CR>(
     auth_user: AuthUser,
     State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR>>>,
+    headers: HeaderMap,
     Json(payload): Json<CreateOrderRequest>,
 ) -> Result<(StatusCode, Json<OrderResponse>)>
 where
@@ -61,6 +78,25 @@ where
     AR: AuditLogRepository,
     CR: CustomerRepository,
 {
+    let idempotency_key = headers
+        .get("Idempotency-Key")
+        .and_then(|value| value.to_str().ok())
+        .filter(|key| !key.is_empty())
+        .map(str::to_string);
+
+    let can_see_unit_cost = matches!(auth_user.role, Role::Owner | Role::Admin);
+
+    if let Some(key) = &idempotency_key {
+        if let Some(existing) =
+            state.idempotency_store.get(&auth_user.tenant_id, key)
+        {
+            return Ok((
+                StatusCode::CREATED,
+                Json(OrderResponse::from_order(existing, can_see_unit_cost)),
+            ));
+        }
+    }
+
     let actor = Actor::from(&auth_user);
     let order = service::create_order(
         &state.orders,
@@ -85,7 +121,12 @@ where
     )
     .await;
 
-    let can_see_unit_cost = matches!(auth_user.role, Role::Owner | Role::Admin);
+    if let Some(key) = &idempotency_key {
+        state
+            .idempotency_store
+            .put(&auth_user.tenant_id, key, order.clone());
+    }
+
     Ok((
         StatusCode::CREATED,
         Json(OrderResponse::from_order(order, can_see_unit_cost)),

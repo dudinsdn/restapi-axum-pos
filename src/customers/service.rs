@@ -39,6 +39,8 @@ where
     TR: TenantRepository,
 {
     ensure_tenant_exists(tenants, tenant_id).await?;
+    validate_name(&payload.name)?;
+    validate_phone(&payload.phone)?;
 
     let customer = Customer {
         id: format!("cust-{}", uuid::Uuid::new_v4().simple()),
@@ -71,6 +73,7 @@ pub async fn update_customer<CR: CustomerRepository>(
     let mut changes = Vec::new();
 
     if let Some(name) = payload.name {
+        validate_name(&name)?;
         if name != customer.name {
             changes.push(FieldChange {
                 field: "name".to_string(),
@@ -81,6 +84,7 @@ pub async fn update_customer<CR: CustomerRepository>(
         }
     }
     if let Some(phone) = payload.phone {
+        validate_phone(&phone)?;
         if phone != customer.phone {
             if let Some(existing) =
                 customers.get_by_phone(tenant_id, &phone).await
@@ -166,6 +170,20 @@ async fn ensure_tenant_exists<TR: TenantRepository>(
 ) -> Result<()> {
     if tenants.get(tenant_id).await.is_none() {
         return Err(AppError::NotFound("tenant not found".into()));
+    }
+    Ok(())
+}
+
+fn validate_name(name: &str) -> Result<()> {
+    if name.trim().is_empty() {
+        return Err(AppError::BadRequest("name must not be empty".into()));
+    }
+    Ok(())
+}
+
+fn validate_phone(phone: &str) -> Result<()> {
+    if phone.trim().is_empty() {
+        return Err(AppError::BadRequest("phone must not be empty".into()));
     }
     Ok(())
 }
