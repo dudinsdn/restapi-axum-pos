@@ -12,9 +12,9 @@ use crate::error::Result;
 use crate::products::ProductRepository;
 use crate::state::AppState;
 use crate::tenants::TenantRepository;
-use crate::users::{Actor, AuthUser, ManagerUser, UserRepository};
+use crate::users::{Actor, AuthUser, ManagerUser, Role, UserRepository};
 
-use super::model::{CreateOrderRequest, Order};
+use super::model::{CreateOrderRequest, OrderResponse};
 use super::repository::OrderRepository;
 use super::service;
 
@@ -23,7 +23,7 @@ use super::service;
 pub async fn list_orders<TR, PR, OR, UR, AR, CR>(
     auth_user: AuthUser,
     State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR>>>,
-) -> Result<Json<Vec<Order>>>
+) -> Result<Json<Vec<OrderResponse>>>
 where
     TR: TenantRepository,
     PR: ProductRepository,
@@ -38,14 +38,21 @@ where
         &auth_user.tenant_id,
     )
     .await?;
-    Ok(Json(orders))
+
+    let can_see_unit_cost = matches!(auth_user.role, Role::Owner | Role::Admin);
+    let response = orders
+        .into_iter()
+        .map(|order| OrderResponse::from_order(order, can_see_unit_cost))
+        .collect();
+
+    Ok(Json(response))
 }
 
 pub async fn create_order<TR, PR, OR, UR, AR, CR>(
     auth_user: AuthUser,
     State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR>>>,
     Json(payload): Json<CreateOrderRequest>,
-) -> Result<(StatusCode, Json<Order>)>
+) -> Result<(StatusCode, Json<OrderResponse>)>
 where
     TR: TenantRepository,
     PR: ProductRepository,
@@ -78,7 +85,11 @@ where
     )
     .await;
 
-    Ok((StatusCode::CREATED, Json(order)))
+    let can_see_unit_cost = matches!(auth_user.role, Role::Owner | Role::Admin);
+    Ok((
+        StatusCode::CREATED,
+        Json(OrderResponse::from_order(order, can_see_unit_cost)),
+    ))
 }
 
 /// Owner and Admin can cancel an order — Cashier cannot, so they can't cover up

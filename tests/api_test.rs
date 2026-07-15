@@ -1085,6 +1085,90 @@ async fn cost_price_is_hidden_from_cashier_but_visible_to_owner_and_admin() {
 }
 
 #[tokio::test]
+async fn order_unit_cost_is_hidden_from_cashier_but_visible_to_owner_and_admin()
+{
+    let app = test_app();
+    let (owner_token, _tenant_id) =
+        register(&app, "toko-budi", "owner@example.com").await;
+    create_product(&app, &owner_token, "SKU-001", 15_000.0, 9_000.0, 10).await;
+    let customer_id = create_customer(&app, &owner_token, "Budi").await;
+    let admin_token =
+        invite_and_login(&app, &owner_token, "admin@example.com", "admin")
+            .await;
+    let cashier_token =
+        invite_and_login(&app, &owner_token, "kasir@example.com", "cashier")
+            .await;
+
+    let create_order_body = serde_json::json!({
+        "customer_id": customer_id,
+        "items": [{ "sku": "SKU-001", "quantity": 1 }]
+    });
+
+    // Owner creates an order and sees unit_cost in the response.
+    let owner_order = body_json(
+        app.clone()
+            .oneshot(json_request(
+                "POST",
+                "/orders",
+                Some(&owner_token),
+                create_order_body.clone(),
+            ))
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(owner_order["items"][0]["unit_cost"], 9_000.0);
+
+    // Cashier creates an order (allowed) but unit_cost must not appear in
+    // their own response, even though it's the same order data.
+    let cashier_order = body_json(
+        app.clone()
+            .oneshot(json_request(
+                "POST",
+                "/orders",
+                Some(&cashier_token),
+                create_order_body,
+            ))
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert!(cashier_order["items"][0].get("unit_cost").is_none());
+
+    // Admin listing orders still sees unit_cost.
+    let admin_orders = body_json(
+        app.clone()
+            .oneshot(get_request("/orders", Some(&admin_token)))
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert!(
+        admin_orders
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|order| order["items"][0]["unit_cost"].is_number())
+    );
+
+    // Cashier listing orders never sees unit_cost, including orders
+    // created by other roles.
+    let cashier_orders = body_json(
+        app.oneshot(get_request("/orders", Some(&cashier_token)))
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert!(
+        cashier_orders
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|order| order["items"][0].get("unit_cost").is_none())
+    );
+}
+
+#[tokio::test]
 async fn admin_can_manage_product_catalog_but_cashier_cannot() {
     let app = test_app();
     let (owner_token, _tenant_id) =
