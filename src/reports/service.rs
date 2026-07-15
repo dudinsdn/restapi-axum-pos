@@ -22,16 +22,16 @@ where
     let all_orders = orders.list_by_tenant(tenant_id).await;
 
     let mut by_sku: HashMap<String, ProductProfit> = HashMap::new();
-    let mut total_revenue = 0.0;
-    let mut total_cost = 0.0;
+    let mut total_revenue: i64 = 0;
+    let mut total_cost: i64 = 0;
     let mut order_count = 0usize;
 
     for order in all_orders.iter().filter(|order| in_range(order, from, to)) {
         order_count += 1;
 
         for item in &order.items {
-            let revenue = item.quantity as f64 * item.unit_price;
-            let cost = item.quantity as f64 * item.unit_cost;
+            let revenue = item.quantity as i64 * item.unit_price;
+            let cost = item.quantity as i64 * item.unit_cost;
             total_revenue += revenue;
             total_cost += cost;
 
@@ -40,9 +40,9 @@ where
                     sku: item.sku.clone(),
                     name: item.name.clone(),
                     quantity_sold: 0,
-                    revenue: 0.0,
-                    cost: 0.0,
-                    profit: 0.0,
+                    revenue: 0,
+                    cost: 0,
+                    profit: 0,
                 }
             });
             entry.quantity_sold += item.quantity;
@@ -53,7 +53,7 @@ where
     }
 
     let mut by_product: Vec<ProductProfit> = by_sku.into_values().collect();
-    by_product.sort_by(|a, b| b.profit.total_cmp(&a.profit));
+    by_product.sort_by(|a, b| b.profit.cmp(&a.profit));
 
     Ok(ProfitReport {
         from,

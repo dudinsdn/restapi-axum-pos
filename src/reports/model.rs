@@ -15,9 +15,9 @@ pub struct ProductProfit {
     pub sku: String,
     pub name: String,
     pub quantity_sold: i32,
-    pub revenue: f64,
-    pub cost: f64,
-    pub profit: f64,
+    pub revenue: i64,
+    pub cost: i64,
+    pub profit: i64,
 }
 
 /// Profit report (revenue minus cost of goods) for one tenant, computed
@@ -32,9 +32,9 @@ pub struct ProfitReport {
     pub from: Option<u64>,
     pub to: Option<u64>,
     pub order_count: usize,
-    pub total_revenue: f64,
-    pub total_cost: f64,
-    pub total_profit: f64,
+    pub total_revenue: i64,
+    pub total_cost: i64,
+    pub total_profit: i64,
     /// Sorted by largest profit contribution, so the owner immediately
     /// sees the most profitable products without needing to sort themselves.
     pub by_product: Vec<ProductProfit>,

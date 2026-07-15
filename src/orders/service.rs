@@ -104,9 +104,9 @@ where
         });
     }
 
-    let total: f64 = items
+    let total: i64 = items
         .iter()
-        .map(|item| item.quantity as f64 * item.unit_price)
+        .map(|item| item.quantity as i64 * item.unit_price)
         .sum();
 
     let order = Order {

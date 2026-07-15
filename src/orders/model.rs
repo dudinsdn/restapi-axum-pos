@@ -7,7 +7,7 @@ pub struct OrderItem {
     pub sku: String,
     pub name: String,
     pub quantity: i32,
-    pub unit_price: f64,
+    pub unit_price: i64,
     /// Snapshot of the product's `cost_price` at the time the order was
     /// created — same reasoning as `unit_price`: if the product's
     /// `cost_price` is changed later, the profit report for OLD orders
@@ -15,7 +15,7 @@ pub struct OrderItem {
     /// `Product::cost_price`: only Owner/Admin see it in responses (see
     /// `OrderItemResponse`) — a Cashier can view an order's items and
     /// prices but never the margin behind them.
-    pub unit_cost: f64,
+    pub unit_cost: i64,
 }
 
 /// Wire representation of an `OrderItem`. Identical to `OrderItem` except
@@ -26,9 +26,9 @@ pub struct OrderItemResponse {
     pub sku: String,
     pub name: String,
     pub quantity: i32,
-    pub unit_price: f64,
+    pub unit_price: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub unit_cost: Option<f64>,
+    pub unit_cost: Option<i64>,
 }
 
 impl OrderItemResponse {
@@ -57,7 +57,7 @@ pub struct Order {
     /// or the data is deleted.
     pub customer_name: String,
     pub items: Vec<OrderItem>,
-    pub total: f64,
+    pub total: i64,
     pub created_by: Actor,
     /// Unix timestamp (seconds) when the order was created — used by the
     /// profit report to filter a time range (`from`/`to`).
@@ -74,7 +74,7 @@ pub struct OrderResponse {
     pub customer_id: String,
     pub customer_name: String,
     pub items: Vec<OrderItemResponse>,
-    pub total: f64,
+    pub total: i64,
     pub created_by: Actor,
     pub created_at: u64,
 }

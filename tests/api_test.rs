@@ -87,8 +87,8 @@ async fn create_product(
     app: &Router,
     token: &str,
     sku: &str,
-    price: f64,
-    cost_price: f64,
+    price: i64,
+    cost_price: i64,
     stock: i32,
 ) -> String {
     let payload = serde_json::json!({
@@ -270,7 +270,7 @@ async fn tenant_data_is_isolated_by_token_not_by_request() {
     let (token_a, _tenant_a) = register(&app, "toko-a", "a@example.com").await;
     let (token_b, _tenant_b) = register(&app, "toko-b", "b@example.com").await;
 
-    create_product(&app, &token_a, "SKU-A", 10_000.0, 6_000.0, 5).await;
+    create_product(&app, &token_a, "SKU-A", 10_000, 6_000, 5).await;
 
     // There's no tenant_id that can be "guessed" or "spoofed" from the
     // client side — the endpoint is exactly the same (`/products`), but
@@ -291,13 +291,13 @@ async fn duplicate_sku_is_rejected() {
     let app = test_app();
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
-    create_product(&app, &token, "SKU-001", 10_000.0, 6_000.0, 5).await;
+    create_product(&app, &token, "SKU-001", 10_000, 6_000, 5).await;
 
     let payload = serde_json::json!({
         "name": "Nama Berbeda",
         "sku": "SKU-001",
-        "price": 12_000.0,
-        "cost_price": 7_000.0,
+        "price": 12_000,
+        "cost_price": 7_000,
         "stock": 3
     });
     let response = app
@@ -313,7 +313,7 @@ async fn order_uses_real_product_price_and_reduces_stock() {
     let app = test_app();
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
-    create_product(&app, &token, "SKU-001", 15_000.0, 9_000.0, 10).await;
+    create_product(&app, &token, "SKU-001", 15_000, 9_000, 10).await;
     let customer_id = create_customer(&app, &token, "Budi").await;
 
     let payload = serde_json::json!({
@@ -328,8 +328,8 @@ async fn order_uses_real_product_price_and_reduces_stock() {
 
     assert_eq!(response.status(), StatusCode::CREATED);
     let order = body_json(response).await;
-    assert_eq!(order["total"], 45_000.0);
-    assert_eq!(order["items"][0]["unit_price"], 15_000.0);
+    assert_eq!(order["total"], 45_000);
+    assert_eq!(order["items"][0]["unit_price"], 15_000);
 
     let products_response = app
         .oneshot(get_request("/products", Some(&token)))
@@ -363,7 +363,7 @@ async fn order_fails_when_stock_insufficient() {
     let app = test_app();
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
-    create_product(&app, &token, "SKU-001", 15_000.0, 9_000.0, 2).await;
+    create_product(&app, &token, "SKU-001", 15_000, 9_000, 2).await;
     let customer_id = create_customer(&app, &token, "Budi").await;
 
     let payload = serde_json::json!({
@@ -438,9 +438,9 @@ async fn update_product_changes_fields() {
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
     let product_id =
-        create_product(&app, &token, "SKU-001", 10_000.0, 6_000.0, 5).await;
+        create_product(&app, &token, "SKU-001", 10_000, 6_000, 5).await;
 
-    let payload = serde_json::json!({ "price": 20_000.0, "stock": 50 });
+    let payload = serde_json::json!({ "price": 20_000, "stock": 50 });
     let response = app
         .clone()
         .oneshot(json_request(
@@ -454,7 +454,7 @@ async fn update_product_changes_fields() {
 
     assert_eq!(response.status(), StatusCode::OK);
     let updated = body_json(response).await;
-    assert_eq!(updated["price"], 20_000.0);
+    assert_eq!(updated["price"], 20_000);
     assert_eq!(updated["stock"], 50);
     // sku & name that weren't sent must remain unchanged.
     assert_eq!(updated["sku"], "SKU-001");
@@ -466,9 +466,9 @@ async fn cannot_update_other_tenants_product() {
     let (token_a, _) = register(&app, "toko-a", "a@example.com").await;
     let (token_b, _) = register(&app, "toko-b", "b@example.com").await;
     let product_id =
-        create_product(&app, &token_a, "SKU-001", 10_000.0, 6_000.0, 5).await;
+        create_product(&app, &token_a, "SKU-001", 10_000, 6_000, 5).await;
 
-    let payload = serde_json::json!({ "price": 1.0 });
+    let payload = serde_json::json!({ "price": 1 });
     let response = app
         .oneshot(json_request(
             "PATCH",
@@ -488,7 +488,7 @@ async fn delete_product_removes_it_from_list() {
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
     let product_id =
-        create_product(&app, &token, "SKU-001", 10_000.0, 6_000.0, 5).await;
+        create_product(&app, &token, "SKU-001", 10_000, 6_000, 5).await;
 
     let delete_response = app
         .clone()
@@ -517,7 +517,7 @@ async fn cancel_order_restores_stock_and_removes_order() {
     let app = test_app();
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
-    create_product(&app, &token, "SKU-001", 15_000.0, 9_000.0, 10).await;
+    create_product(&app, &token, "SKU-001", 15_000, 9_000, 10).await;
     let customer_id = create_customer(&app, &token, "Budi").await;
 
     let order_payload = serde_json::json!({
@@ -588,8 +588,8 @@ async fn product_and_order_record_who_created_them() {
             serde_json::json!({
                 "name": "Kopi Susu",
                 "sku": "SKU-001",
-                "price": 15_000.0,
-                "cost_price": 9_000.0,
+                "price": 15_000,
+                "cost_price": 9_000,
                 "stock": 10
             }),
         ))
@@ -622,14 +622,14 @@ async fn audit_log_records_create_update_and_delete() {
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
     let product_id =
-        create_product(&app, &token, "SKU-001", 10_000.0, 6_000.0, 5).await;
+        create_product(&app, &token, "SKU-001", 10_000, 6_000, 5).await;
 
     app.clone()
         .oneshot(json_request(
             "PATCH",
             &format!("/products/{product_id}"),
             Some(&token),
-            serde_json::json!({ "price": 12_000.0 }),
+            serde_json::json!({ "price": 12_000 }),
         ))
         .await
         .unwrap();
@@ -671,7 +671,7 @@ async fn audit_logs_are_isolated_per_tenant() {
     let (token_a, _) = register(&app, "toko-a", "a@example.com").await;
     let (token_b, _) = register(&app, "toko-b", "b@example.com").await;
 
-    create_product(&app, &token_a, "SKU-001", 10_000.0, 6_000.0, 5).await;
+    create_product(&app, &token_a, "SKU-001", 10_000, 6_000, 5).await;
 
     let logs_b = app
         .oneshot(get_request("/tenants/me/audit-logs", Some(&token_b)))
@@ -687,14 +687,14 @@ async fn audit_log_records_field_level_changes_on_update() {
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
     let product_id =
-        create_product(&app, &token, "SKU-001", 10_000.0, 6_000.0, 5).await;
+        create_product(&app, &token, "SKU-001", 10_000, 6_000, 5).await;
 
     app.clone()
         .oneshot(json_request(
             "PATCH",
             &format!("/products/{product_id}"),
             Some(&token),
-            serde_json::json!({ "price": 12_000.0, "stock": 20 }),
+            serde_json::json!({ "price": 12_000, "stock": 20 }),
         ))
         .await
         .unwrap();
@@ -734,7 +734,7 @@ async fn noop_update_does_not_write_audit_entry() {
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
     let product_id =
-        create_product(&app, &token, "SKU-001", 10_000.0, 6_000.0, 5).await;
+        create_product(&app, &token, "SKU-001", 10_000, 6_000, 5).await;
 
     // Send a price whose VALUE IS EXACTLY THE SAME as the current one.
     let response = app
@@ -743,7 +743,7 @@ async fn noop_update_does_not_write_audit_entry() {
             "PATCH",
             &format!("/products/{product_id}"),
             Some(&token),
-            serde_json::json!({ "price": 10_000.0 }),
+            serde_json::json!({ "price": 10_000 }),
         ))
         .await
         .unwrap();
@@ -765,7 +765,7 @@ async fn audit_log_records_which_fields_changed() {
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
     let product_id =
-        create_product(&app, &token, "SKU-001", 10_000.0, 6_000.0, 5).await;
+        create_product(&app, &token, "SKU-001", 10_000, 6_000, 5).await;
 
     // Only change price & stock, name isn't sent -> must not appear in
     // changes.
@@ -774,7 +774,7 @@ async fn audit_log_records_which_fields_changed() {
             "PATCH",
             &format!("/products/{product_id}"),
             Some(&token),
-            serde_json::json!({ "price": 12_000.0, "stock": 8 }),
+            serde_json::json!({ "price": 12_000, "stock": 8 }),
         ))
         .await
         .unwrap();
@@ -814,7 +814,7 @@ async fn no_op_update_does_not_create_audit_entry() {
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
     let product_id =
-        create_product(&app, &token, "SKU-001", 10_000.0, 6_000.0, 5).await;
+        create_product(&app, &token, "SKU-001", 10_000, 6_000, 5).await;
 
     // Send a value that's EXACTLY THE SAME as the current one -> no real
     // change, so no new audit entry should be added.
@@ -823,7 +823,7 @@ async fn no_op_update_does_not_create_audit_entry() {
             "PATCH",
             &format!("/products/{product_id}"),
             Some(&token),
-            serde_json::json!({ "price": 10_000.0 }),
+            serde_json::json!({ "price": 10_000 }),
         ))
         .await
         .unwrap();
@@ -1014,7 +1014,7 @@ async fn cashier_can_view_products_and_create_orders() {
     let app = test_app();
     let (owner_token, _tenant_id) =
         register(&app, "toko-budi", "owner@example.com").await;
-    create_product(&app, &owner_token, "SKU-001", 15_000.0, 9_000.0, 10).await;
+    create_product(&app, &owner_token, "SKU-001", 15_000, 9_000, 10).await;
     let customer_id = create_customer(&app, &owner_token, "Pelanggan").await;
     let cashier_token =
         invite_and_login(&app, &owner_token, "kasir@example.com", "cashier")
@@ -1048,7 +1048,7 @@ async fn cost_price_is_hidden_from_cashier_but_visible_to_owner_and_admin() {
     let app = test_app();
     let (owner_token, _tenant_id) =
         register(&app, "toko-budi", "owner@example.com").await;
-    create_product(&app, &owner_token, "SKU-001", 15_000.0, 9_000.0, 10).await;
+    create_product(&app, &owner_token, "SKU-001", 15_000, 9_000, 10).await;
     let admin_token =
         invite_and_login(&app, &owner_token, "admin@example.com", "admin")
             .await;
@@ -1063,7 +1063,7 @@ async fn cost_price_is_hidden_from_cashier_but_visible_to_owner_and_admin() {
             .unwrap(),
     )
     .await;
-    assert_eq!(owner_products[0]["cost_price"], 9_000.0);
+    assert_eq!(owner_products[0]["cost_price"], 9_000);
 
     let admin_products = body_json(
         app.clone()
@@ -1072,7 +1072,7 @@ async fn cost_price_is_hidden_from_cashier_but_visible_to_owner_and_admin() {
             .unwrap(),
     )
     .await;
-    assert_eq!(admin_products[0]["cost_price"], 9_000.0);
+    assert_eq!(admin_products[0]["cost_price"], 9_000);
 
     let cashier_products = body_json(
         app.oneshot(get_request("/products", Some(&cashier_token)))
@@ -1090,7 +1090,7 @@ async fn order_unit_cost_is_hidden_from_cashier_but_visible_to_owner_and_admin()
     let app = test_app();
     let (owner_token, _tenant_id) =
         register(&app, "toko-budi", "owner@example.com").await;
-    create_product(&app, &owner_token, "SKU-001", 15_000.0, 9_000.0, 10).await;
+    create_product(&app, &owner_token, "SKU-001", 15_000, 9_000, 10).await;
     let customer_id = create_customer(&app, &owner_token, "Budi").await;
     let admin_token =
         invite_and_login(&app, &owner_token, "admin@example.com", "admin")
@@ -1117,7 +1117,7 @@ async fn order_unit_cost_is_hidden_from_cashier_but_visible_to_owner_and_admin()
             .unwrap(),
     )
     .await;
-    assert_eq!(owner_order["items"][0]["unit_cost"], 9_000.0);
+    assert_eq!(owner_order["items"][0]["unit_cost"], 9_000);
 
     // Cashier creates an order (allowed) but unit_cost must not appear in
     // their own response, even though it's the same order data.
@@ -1183,8 +1183,8 @@ async fn admin_can_manage_product_catalog_but_cashier_cannot() {
     let create_payload = serde_json::json!({
         "name": "Produk Baru",
         "sku": "SKU-002",
-        "price": 5_000.0,
-        "cost_price": 3_000.0,
+        "price": 5_000,
+        "cost_price": 3_000,
         "stock": 1
     });
     let admin_create = app
@@ -1215,7 +1215,7 @@ async fn admin_can_manage_product_catalog_but_cashier_cannot() {
         .unwrap();
     assert_eq!(cashier_create.status(), StatusCode::FORBIDDEN);
 
-    let update_payload = serde_json::json!({ "price": 20_000.0 });
+    let update_payload = serde_json::json!({ "price": 20_000 });
     let admin_update = app
         .clone()
         .oneshot(json_request(
@@ -1269,7 +1269,7 @@ async fn admin_can_cancel_order_but_cashier_cannot() {
     let app = test_app();
     let (owner_token, _tenant_id) =
         register(&app, "toko-budi", "owner@example.com").await;
-    create_product(&app, &owner_token, "SKU-001", 15_000.0, 9_000.0, 10).await;
+    create_product(&app, &owner_token, "SKU-001", 15_000, 9_000, 10).await;
     let customer_id = create_customer(&app, &owner_token, "Pelanggan").await;
     let admin_token =
         invite_and_login(&app, &owner_token, "admin@example.com", "admin")
@@ -1326,7 +1326,7 @@ async fn admin_can_view_audit_logs_but_cashier_cannot() {
     let app = test_app();
     let (owner_token, _tenant_id) =
         register(&app, "toko-budi", "owner@example.com").await;
-    create_product(&app, &owner_token, "SKU-001", 15_000.0, 9_000.0, 10).await;
+    create_product(&app, &owner_token, "SKU-001", 15_000, 9_000, 10).await;
     let admin_token =
         invite_and_login(&app, &owner_token, "admin@example.com", "admin")
             .await;
@@ -1508,7 +1508,7 @@ async fn order_with_unknown_customer_id_returns_not_found() {
     let app = test_app();
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
-    create_product(&app, &token, "SKU-001", 15_000.0, 9_000.0, 10).await;
+    create_product(&app, &token, "SKU-001", 15_000, 9_000, 10).await;
 
     let payload = serde_json::json!({
         "customer_id": "cust-tidak-ada",
@@ -1526,7 +1526,7 @@ async fn order_cannot_use_customer_from_another_tenant() {
     let app = test_app();
     let (token_a, _) = register(&app, "toko-a", "a@example.com").await;
     let (token_b, _) = register(&app, "toko-b", "b@example.com").await;
-    create_product(&app, &token_a, "SKU-001", 15_000.0, 9_000.0, 10).await;
+    create_product(&app, &token_a, "SKU-001", 15_000, 9_000, 10).await;
     let customer_id_b = create_customer(&app, &token_b, "Pelanggan B").await;
 
     let payload = serde_json::json!({
@@ -1546,7 +1546,7 @@ async fn update_product_can_change_cost_price_and_it_is_audited() {
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
     let product_id =
-        create_product(&app, &token, "SKU-001", 10_000.0, 6_000.0, 5).await;
+        create_product(&app, &token, "SKU-001", 10_000, 6_000, 5).await;
 
     let response = app
         .clone()
@@ -1554,16 +1554,16 @@ async fn update_product_can_change_cost_price_and_it_is_audited() {
             "PATCH",
             &format!("/products/{product_id}"),
             Some(&token),
-            serde_json::json!({ "cost_price": 7_000.0 }),
+            serde_json::json!({ "cost_price": 7_000 }),
         ))
         .await
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
     let updated = body_json(response).await;
-    assert_eq!(updated["cost_price"], 7_000.0);
+    assert_eq!(updated["cost_price"], 7_000);
     // price wasn't sent in the payload -> must remain unchanged.
-    assert_eq!(updated["price"], 10_000.0);
+    assert_eq!(updated["price"], 10_000);
 
     let logs_response = app
         .oneshot(get_request("/tenants/me/audit-logs", Some(&token)))
@@ -1585,7 +1585,7 @@ async fn order_snapshots_cost_price_so_later_changes_dont_affect_history() {
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
     let product_id =
-        create_product(&app, &token, "SKU-001", 20_000.0, 12_000.0, 10).await;
+        create_product(&app, &token, "SKU-001", 20_000, 12_000, 10).await;
     let customer_id = create_customer(&app, &token, "Budi").await;
 
     let order_response = app
@@ -1603,7 +1603,7 @@ async fn order_snapshots_cost_price_so_later_changes_dont_affect_history() {
         .unwrap();
     assert_eq!(order_response.status(), StatusCode::CREATED);
     let order = body_json(order_response).await;
-    assert_eq!(order["items"][0]["unit_cost"], 12_000.0);
+    assert_eq!(order["items"][0]["unit_cost"], 12_000);
 
     // Change the product's cost_price AFTER the order is created.
     app.clone()
@@ -1611,22 +1611,22 @@ async fn order_snapshots_cost_price_so_later_changes_dont_affect_history() {
             "PATCH",
             &format!("/products/{product_id}"),
             Some(&token),
-            serde_json::json!({ "cost_price": 18_000.0 }),
+            serde_json::json!({ "cost_price": 18_000 }),
         ))
         .await
         .unwrap();
 
-    // The profit report must still use the OLD cost_price (12_000.0) that
-    // was snapshotted when the order was created, not the new one (18_000.0).
+    // The profit report must still use the OLD cost_price (12_000) that
+    // was snapshotted when the order was created, not the new one (18_000).
     let report_response = app
         .oneshot(get_request("/tenants/me/reports/profit", Some(&token)))
         .await
         .unwrap();
     assert_eq!(report_response.status(), StatusCode::OK);
     let report = body_json(report_response).await;
-    assert_eq!(report["total_revenue"], 40_000.0);
-    assert_eq!(report["total_cost"], 24_000.0);
-    assert_eq!(report["total_profit"], 16_000.0);
+    assert_eq!(report["total_revenue"], 40_000);
+    assert_eq!(report["total_cost"], 24_000);
+    assert_eq!(report["total_profit"], 16_000);
 }
 
 #[tokio::test]
@@ -1634,8 +1634,8 @@ async fn profit_report_computes_totals_and_per_product_breakdown() {
     let app = test_app();
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
-    create_product(&app, &token, "SKU-A", 10_000.0, 6_000.0, 10).await;
-    create_product(&app, &token, "SKU-B", 50_000.0, 20_000.0, 10).await;
+    create_product(&app, &token, "SKU-A", 10_000, 6_000, 10).await;
+    create_product(&app, &token, "SKU-B", 50_000, 20_000, 10).await;
     let customer_id = create_customer(&app, &token, "Budi").await;
 
     let response = app
@@ -1666,20 +1666,20 @@ async fn profit_report_computes_totals_and_per_product_breakdown() {
     let report = body_json(report_response).await;
 
     assert_eq!(report["order_count"], 1);
-    assert_eq!(report["total_revenue"], 140_000.0);
-    assert_eq!(report["total_cost"], 64_000.0);
-    assert_eq!(report["total_profit"], 76_000.0);
+    assert_eq!(report["total_revenue"], 140_000);
+    assert_eq!(report["total_cost"], 64_000);
+    assert_eq!(report["total_profit"], 76_000);
 
     let by_product = report["by_product"].as_array().unwrap();
     assert_eq!(by_product.len(), 2);
     // Sorted by largest profit -> SKU-B (60_000) first.
     assert_eq!(by_product[0]["sku"], "SKU-B");
     assert_eq!(by_product[0]["quantity_sold"], 2);
-    assert_eq!(by_product[0]["revenue"], 100_000.0);
-    assert_eq!(by_product[0]["cost"], 40_000.0);
-    assert_eq!(by_product[0]["profit"], 60_000.0);
+    assert_eq!(by_product[0]["revenue"], 100_000);
+    assert_eq!(by_product[0]["cost"], 40_000);
+    assert_eq!(by_product[0]["profit"], 60_000);
     assert_eq!(by_product[1]["sku"], "SKU-A");
-    assert_eq!(by_product[1]["profit"], 16_000.0);
+    assert_eq!(by_product[1]["profit"], 16_000);
 }
 
 #[tokio::test]
@@ -1687,7 +1687,7 @@ async fn profit_report_is_owner_only() {
     let app = test_app();
     let (owner_token, _tenant_id) =
         register(&app, "toko-budi", "owner@example.com").await;
-    create_product(&app, &owner_token, "SKU-001", 15_000.0, 9_000.0, 10).await;
+    create_product(&app, &owner_token, "SKU-001", 15_000, 9_000, 10).await;
     let admin_token =
         invite_and_login(&app, &owner_token, "admin@example.com", "admin")
             .await;
@@ -1732,7 +1732,7 @@ async fn profit_report_can_be_filtered_by_date_range() {
     let app = test_app();
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
-    create_product(&app, &token, "SKU-001", 15_000.0, 9_000.0, 10).await;
+    create_product(&app, &token, "SKU-001", 15_000, 9_000, 10).await;
     let customer_id = create_customer(&app, &token, "Budi").await;
 
     let before = now_unix();
@@ -1775,7 +1775,7 @@ async fn profit_report_can_be_filtered_by_date_range() {
         .unwrap();
     let out_of_range = body_json(out_of_range_response).await;
     assert_eq!(out_of_range["order_count"], 0);
-    assert_eq!(out_of_range["total_profit"], 0.0);
+    assert_eq!(out_of_range["total_profit"], 0);
 }
 
 fn now_unix() -> u64 {
