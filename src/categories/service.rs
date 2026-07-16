@@ -101,24 +101,43 @@ pub async fn update_category<KR: CategoryRepository>(
 
 /// Returns the deleted category (not just unit) — used by the caller to
 /// write an audit log entry with the category's name before its data is
-/// gone. Does NOT touch any product currently carrying this name as its
-/// `Product::category` — see `CategoryRepository::delete`.
-pub async fn delete_category<KR: CategoryRepository>(
+/// gone.
+///
+/// Also orphans any product currently referencing this category: their
+/// `category_id` is cleared back to `None`, but `Product::category` (the
+/// denormalized display name) is left untouched — same trade-off as
+/// `Order::customer_name` surviving a deleted `Customer`. This is done
+/// explicitly here (rather than relying solely on Postgres's
+/// `ON DELETE SET NULL`) so the in-memory backend, which has no real FK,
+/// behaves identically.
+pub async fn delete_category<KR, PR>(
     categories: &KR,
+    products: &PR,
     tenant_id: &str,
     category_id: &str,
-) -> Result<Category> {
+) -> Result<Category>
+where
+    KR: CategoryRepository,
+    PR: ProductRepository,
+{
     let category =
         fetch_owned_category(categories, tenant_id, category_id).await?;
     categories.delete(&category.id).await;
+
+    let affected_products = products.list_by_tenant(tenant_id).await;
+    for mut product in affected_products {
+        if product.category_id.as_deref() == Some(category.id.as_str()) {
+            product.category_id = None;
+            products.update(product).await;
+        }
+    }
+
     Ok(category)
 }
 
-/// Products currently tagged with this category's name — this is the
-/// "look up by product" side of category CRUD: given a category, find
-/// what's in it. Matched the same way `GET /products?category=` matches
-/// (case-insensitive equality against `Product::category`), since that
-/// filter and this lookup need to agree on what "in this category" means.
+/// Products currently referencing this category via `Product::category_id`
+/// — this is the "look up by product" side of category CRUD: given a
+/// category, find what's in it.
 pub async fn list_products_in_category<KR, PR, TR>(
     categories: &KR,
     products: &PR,
@@ -138,7 +157,9 @@ where
     let all = products.list_by_tenant(tenant_id).await;
     Ok(all
         .into_iter()
-        .filter(|product| product.category.eq_ignore_ascii_case(&category.name))
+        .filter(|product| {
+            product.category_id.as_deref() == Some(category.id.as_str())
+        })
         .collect())
 }
 

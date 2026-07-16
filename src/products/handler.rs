@@ -144,6 +144,7 @@ where
     let product = service::create_product(
         &state.products,
         &state.tenants,
+        &state.categories,
         &auth_user.tenant_id,
         actor.clone(),
         payload,
@@ -188,6 +189,7 @@ where
 {
     let (product, changes) = service::update_product(
         &state.products,
+        &state.categories,
         &auth_user.tenant_id,
         &product_id,
         payload,

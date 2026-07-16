@@ -1,4 +1,5 @@
 use crate::audit::FieldChange;
+use crate::categories::CategoryRepository;
 use crate::error::{AppError, Result};
 use crate::tenants::TenantRepository;
 use crate::users::Actor;
@@ -44,9 +45,10 @@ where
         .collect())
 }
 
-pub async fn create_product<PR, TR>(
+pub async fn create_product<PR, TR, KR>(
     products: &PR,
     tenants: &TR,
+    categories: &KR,
     tenant_id: &str,
     actor: Actor,
     payload: CreateProductRequest,
@@ -54,6 +56,7 @@ pub async fn create_product<PR, TR>(
 where
     PR: ProductRepository,
     TR: TenantRepository,
+    KR: CategoryRepository,
 {
     ensure_tenant_exists(tenants, tenant_id).await?;
     validate_name(&payload.name)?;
@@ -61,12 +64,12 @@ where
     validate_price("price", payload.price)?;
     validate_price("cost_price", payload.cost_price)?;
     validate_stock(payload.stock)?;
-    if let Some(category) = &payload.category {
-        validate_category(category)?;
-    }
     if let Some(threshold) = payload.low_stock_threshold {
         validate_low_stock_threshold(threshold)?;
     }
+    let (category_id, category) =
+        resolve_category(categories, tenant_id, payload.category_id.as_deref())
+            .await?;
 
     let product = Product {
         id: format!("prod-{}", uuid::Uuid::new_v4().simple()),
@@ -76,9 +79,8 @@ where
         price: payload.price,
         cost_price: payload.cost_price,
         stock: payload.stock,
-        category: payload
-            .category
-            .unwrap_or_else(|| DEFAULT_CATEGORY.to_string()),
+        category_id,
+        category,
         low_stock_threshold: payload
             .low_stock_threshold
             .unwrap_or(DEFAULT_LOW_STOCK_THRESHOLD),
@@ -95,12 +97,17 @@ where
     Ok(product)
 }
 
-pub async fn update_product<PR: ProductRepository>(
+pub async fn update_product<PR, KR>(
     products: &PR,
+    categories: &KR,
     tenant_id: &str,
     product_id: &str,
     payload: UpdateProductRequest,
-) -> Result<(Product, Vec<FieldChange>)> {
+) -> Result<(Product, Vec<FieldChange>)>
+where
+    PR: ProductRepository,
+    KR: CategoryRepository,
+{
     let mut product =
         fetch_owned_product(products, tenant_id, product_id).await?;
     let mut changes = Vec::new();
@@ -149,15 +156,18 @@ pub async fn update_product<PR: ProductRepository>(
             product.stock = stock;
         }
     }
-    if let Some(category) = payload.category {
-        validate_category(&category)?;
-        if category != product.category {
+    if let Some(category_id) = payload.category_id {
+        let (new_category_id, new_category_name) =
+            resolve_category(categories, tenant_id, Some(category_id.as_str()))
+                .await?;
+        if new_category_id != product.category_id {
             changes.push(FieldChange {
                 field: "category".to_string(),
                 old_value: product.category.clone(),
-                new_value: category.clone(),
+                new_value: new_category_name.clone(),
             });
-            product.category = category;
+            product.category_id = new_category_id;
+            product.category = new_category_name;
         }
     }
     if let Some(threshold) = payload.low_stock_threshold {
@@ -195,6 +205,31 @@ pub async fn delete_product<PR: ProductRepository>(
     let product = fetch_owned_product(products, tenant_id, product_id).await?;
     products.delete(&product.id).await;
     Ok(product)
+}
+
+/// Resolves an optional `category_id` from a request into the
+/// `(category_id, category_name)` pair stored on `Product`. `None` maps to
+/// "uncategorized" (`DEFAULT_CATEGORY`); `Some(id)` MUST reference an
+/// existing category belonging to this tenant, same validation strength
+/// as `Order::customer_id` against `CustomerRepository`.
+async fn resolve_category<KR: CategoryRepository>(
+    categories: &KR,
+    tenant_id: &str,
+    category_id: Option<&str>,
+) -> Result<(Option<String>, String)> {
+    match category_id {
+        None => Ok((None, DEFAULT_CATEGORY.to_string())),
+        Some(id) => {
+            let category = categories
+                .get(id)
+                .await
+                .filter(|category| category.tenant_id == tenant_id)
+                .ok_or_else(|| {
+                    AppError::NotFound("category not found".into())
+                })?;
+            Ok((Some(category.id), category.name))
+        }
+    }
 }
 
 /// Fetch a product by id AND ensure it belongs to the requesting tenant.
@@ -251,13 +286,6 @@ fn validate_price(field_name: &str, value: i64) -> Result<()> {
 fn validate_stock(stock: i32) -> Result<()> {
     if stock < 0 {
         return Err(AppError::BadRequest("stock must not be negative".into()));
-    }
-    Ok(())
-}
-
-fn validate_category(category: &str) -> Result<()> {
-    if category.trim().is_empty() {
-        return Err(AppError::BadRequest("category must not be empty".into()));
     }
     Ok(())
 }

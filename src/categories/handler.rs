@@ -217,6 +217,7 @@ where
 {
     let category = service::delete_category(
         &state.categories,
+        &state.products,
         &auth_user.tenant_id,
         &category_id,
     )

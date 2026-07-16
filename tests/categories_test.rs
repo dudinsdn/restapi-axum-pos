@@ -246,21 +246,23 @@ async fn category_products_endpoint_looks_up_products_by_category() {
         .unwrap()
         .to_string();
 
-    for (sku, category) in [("SKU-A", "Beverages"), ("SKU-B", "Snacks")] {
+    // SKU-A is tagged with the "Beverages" category via `category_id`;
+    // SKU-B is left uncategorized, so it must NOT show up in the lookup.
+    for (sku, category_id_value) in
+        [("SKU-A", Some(category_id.clone())), ("SKU-B", None)]
+    {
+        let mut payload = serde_json::json!({
+            "name": format!("Produk {sku}"),
+            "sku": sku,
+            "price": 5_000,
+            "cost_price": 2_000,
+            "stock": 10
+        });
+        if let Some(id) = category_id_value {
+            payload["category_id"] = serde_json::json!(id);
+        }
         app.clone()
-            .oneshot(json_request(
-                "POST",
-                "/products",
-                Some(&token),
-                serde_json::json!({
-                    "name": format!("Produk {sku}"),
-                    "sku": sku,
-                    "price": 5_000,
-                    "cost_price": 2_000,
-                    "stock": 10,
-                    "category": category
-                }),
-            ))
+            .oneshot(json_request("POST", "/products", Some(&token), payload))
             .await
             .unwrap();
     }
@@ -309,7 +311,7 @@ async fn category_products_endpoint_hides_cost_price_from_cashier() {
                 "price": 5_000,
                 "cost_price": 2_000,
                 "stock": 10,
-                "category": "Beverages"
+                "category_id": category_id
             }),
         ))
         .await
@@ -329,4 +331,77 @@ async fn category_products_endpoint_hides_cost_price_from_cashier() {
     let products = body_json(response).await;
     assert_eq!(products[0]["sku"], "SKU-DRINK");
     assert!(products[0].get("cost_price").is_none());
+}
+
+#[tokio::test]
+async fn deleting_a_category_clears_category_id_but_keeps_the_display_name() {
+    let app = test_app();
+    let (token, _tenant_id) =
+        register(&app, "toko-budi", "budi@example.com").await;
+
+    let category_response = app
+        .clone()
+        .oneshot(json_request(
+            "POST",
+            "/categories",
+            Some(&token),
+            serde_json::json!({ "name": "Beverages" }),
+        ))
+        .await
+        .unwrap();
+    let category_id = body_json(category_response).await["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let product_response = app
+        .clone()
+        .oneshot(json_request(
+            "POST",
+            "/products",
+            Some(&token),
+            serde_json::json!({
+                "name": "Es Teh",
+                "sku": "SKU-DRINK",
+                "price": 5_000,
+                "cost_price": 2_000,
+                "stock": 10,
+                "category_id": category_id
+            }),
+        ))
+        .await
+        .unwrap();
+    let product_id = body_json(product_response).await["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let delete_response = app
+        .clone()
+        .oneshot(json_request(
+            "DELETE",
+            &format!("/categories/{category_id}"),
+            Some(&token),
+            serde_json::json!({}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(delete_response.status(), StatusCode::NO_CONTENT);
+
+    // The category is gone, but the product's denormalized display name
+    // survives — same trade-off as an order's `customer_name` surviving a
+    // deleted customer. Only `category_id` gets cleared.
+    let products_response = app
+        .oneshot(get_request("/products", Some(&token)))
+        .await
+        .unwrap();
+    let products = body_json(products_response).await;
+    let product = products
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|product| product["id"] == product_id)
+        .expect("product should still exist");
+    assert!(product["category_id"].is_null());
+    assert_eq!(product["category"], "Beverages");
 }

@@ -15,6 +15,7 @@ struct ProductRow {
     price: i64,
     cost_price: i64,
     stock: i32,
+    category_id: Option<String>,
     category: String,
     low_stock_threshold: i32,
     created_by: Json<Actor>,
@@ -30,6 +31,7 @@ impl From<ProductRow> for Product {
             price: row.price,
             cost_price: row.cost_price,
             stock: row.stock,
+            category_id: row.category_id,
             category: row.category,
             low_stock_threshold: row.low_stock_threshold,
             created_by: row.created_by.0,
@@ -42,6 +44,12 @@ impl From<ProductRow> for Product {
 /// `reserve_stock`, which pushes the "enough stock?" check into the SQL
 /// `WHERE` clause so the check-and-decrement stays atomic without any
 /// application-level locking.
+///
+/// `category_id` has a nullable FK to `categories(id)` with
+/// `ON DELETE SET NULL` as a database-level backstop, but the actual
+/// source of truth for orphaning is `categories::service::delete_category`,
+/// which explicitly clears `category_id` on affected products so the
+/// in-memory backend (no real FK) behaves identically.
 #[derive(Debug, Clone)]
 pub struct PgProductRepository {
     pool: PgPool,
@@ -60,9 +68,9 @@ impl ProductRepository for PgProductRepository {
         // enforces by hand under a write-lock.
         sqlx::query(
             "INSERT INTO products \
-             (id, tenant_id, name, sku, price, cost_price, stock, category, \
-              low_stock_threshold, created_by) \
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
+             (id, tenant_id, name, sku, price, cost_price, stock, \
+              category_id, category, low_stock_threshold, created_by) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
         )
         .bind(&product.id)
         .bind(&product.tenant_id)
@@ -71,6 +79,7 @@ impl ProductRepository for PgProductRepository {
         .bind(product.price)
         .bind(product.cost_price)
         .bind(product.stock)
+        .bind(&product.category_id)
         .bind(&product.category)
         .bind(product.low_stock_threshold)
         .bind(Json(product.created_by.clone()))
@@ -81,8 +90,8 @@ impl ProductRepository for PgProductRepository {
 
     async fn list_by_tenant(&self, tenant_id: &str) -> Vec<Product> {
         sqlx::query_as::<_, ProductRow>(
-            "SELECT id, tenant_id, name, sku, price, cost_price, stock, category, \
-                    low_stock_threshold, created_by \
+            "SELECT id, tenant_id, name, sku, price, cost_price, stock, \
+                    category_id, category, low_stock_threshold, created_by \
              FROM products WHERE tenant_id = $1",
         )
         .bind(tenant_id)
@@ -96,8 +105,8 @@ impl ProductRepository for PgProductRepository {
 
     async fn get_by_sku(&self, tenant_id: &str, sku: &str) -> Option<Product> {
         sqlx::query_as::<_, ProductRow>(
-            "SELECT id, tenant_id, name, sku, price, cost_price, stock, category, \
-                    low_stock_threshold, created_by \
+            "SELECT id, tenant_id, name, sku, price, cost_price, stock, \
+                    category_id, category, low_stock_threshold, created_by \
              FROM products WHERE tenant_id = $1 AND sku = $2",
         )
         .bind(tenant_id)
@@ -111,8 +120,8 @@ impl ProductRepository for PgProductRepository {
 
     async fn get(&self, id: &str) -> Option<Product> {
         sqlx::query_as::<_, ProductRow>(
-            "SELECT id, tenant_id, name, sku, price, cost_price, stock, category, \
-                    low_stock_threshold, created_by \
+            "SELECT id, tenant_id, name, sku, price, cost_price, stock, \
+                    category_id, category, low_stock_threshold, created_by \
              FROM products WHERE id = $1",
         )
         .bind(id)
@@ -126,7 +135,7 @@ impl ProductRepository for PgProductRepository {
     async fn update(&self, product: Product) -> bool {
         let result = sqlx::query(
             "UPDATE products SET name = $2, price = $3, cost_price = $4, stock = $5, \
-                                   category = $6, low_stock_threshold = $7 \
+                                   category_id = $6, category = $7, low_stock_threshold = $8 \
              WHERE id = $1",
         )
         .bind(&product.id)
@@ -134,6 +143,7 @@ impl ProductRepository for PgProductRepository {
         .bind(product.price)
         .bind(product.cost_price)
         .bind(product.stock)
+        .bind(&product.category_id)
         .bind(&product.category)
         .bind(product.low_stock_threshold)
         .execute(&self.pool)

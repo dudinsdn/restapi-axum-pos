@@ -484,6 +484,21 @@ async fn create_product_accepts_explicit_category_and_threshold() {
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
 
+    let category_response = app
+        .clone()
+        .oneshot(json_request(
+            "POST",
+            "/categories",
+            Some(&token),
+            serde_json::json!({ "name": "Beverages" }),
+        ))
+        .await
+        .unwrap();
+    let category_id = body_json(category_response).await["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
     let response = app
         .clone()
         .oneshot(json_request(
@@ -496,7 +511,7 @@ async fn create_product_accepts_explicit_category_and_threshold() {
                 "price": 5_000,
                 "cost_price": 2_000,
                 "stock": 20,
-                "category": "Beverages",
+                "category_id": category_id,
                 "low_stock_threshold": 10
             }),
         ))
@@ -504,17 +519,18 @@ async fn create_product_accepts_explicit_category_and_threshold() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::CREATED);
     let created = body_json(response).await;
+    assert_eq!(created["category_id"], category_id);
     assert_eq!(created["category"], "Beverages");
     assert_eq!(created["low_stock_threshold"], 10);
 }
 
 #[tokio::test]
-async fn create_product_rejects_blank_category_and_negative_threshold() {
+async fn create_product_rejects_unknown_category_id_and_negative_threshold() {
     let app = test_app();
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
 
-    let blank_category = app
+    let unknown_category = app
         .clone()
         .oneshot(json_request(
             "POST",
@@ -526,12 +542,12 @@ async fn create_product_rejects_blank_category_and_negative_threshold() {
                 "price": 1000,
                 "cost_price": 500,
                 "stock": 5,
-                "category": "   "
+                "category_id": "cat-does-not-exist"
             }),
         ))
         .await
         .unwrap();
-    assert_eq!(blank_category.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(unknown_category.status(), StatusCode::NOT_FOUND);
 
     let negative_threshold = app
         .oneshot(json_request(
@@ -560,18 +576,34 @@ async fn update_product_can_change_category_and_it_is_audited() {
     let product_id =
         create_product(&app, &token, "SKU-001", 10_000, 6_000, 5).await;
 
+    let category_response = app
+        .clone()
+        .oneshot(json_request(
+            "POST",
+            "/categories",
+            Some(&token),
+            serde_json::json!({ "name": "Snacks" }),
+        ))
+        .await
+        .unwrap();
+    let category_id = body_json(category_response).await["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
     let response = app
         .clone()
         .oneshot(json_request(
             "PATCH",
             &format!("/products/{product_id}"),
             Some(&token),
-            serde_json::json!({ "category": "Snacks" }),
+            serde_json::json!({ "category_id": category_id }),
         ))
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     let updated = body_json(response).await;
+    assert_eq!(updated["category_id"], category_id);
     assert_eq!(updated["category"], "Snacks");
 
     let logs_response = app
@@ -595,7 +627,26 @@ async fn list_products_can_be_filtered_by_category() {
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
 
-    for (sku, category) in [
+    let mut category_ids = std::collections::HashMap::new();
+    for name in ["Beverages", "Snacks"] {
+        let category_response = app
+            .clone()
+            .oneshot(json_request(
+                "POST",
+                "/categories",
+                Some(&token),
+                serde_json::json!({ "name": name }),
+            ))
+            .await
+            .unwrap();
+        let category_id = body_json(category_response).await["id"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        category_ids.insert(name, category_id);
+    }
+
+    for (sku, category_name) in [
         ("SKU-A", "Beverages"),
         ("SKU-B", "Beverages"),
         ("SKU-C", "Snacks"),
@@ -611,14 +662,15 @@ async fn list_products_can_be_filtered_by_category() {
                     "price": 5_000,
                     "cost_price": 2_000,
                     "stock": 10,
-                    "category": category
+                    "category_id": category_ids[category_name]
                 }),
             ))
             .await
             .unwrap();
     }
 
-    // Filter is case-insensitive.
+    // Filter is case-insensitive (still matches by category NAME, via
+    // `?category=`, not by id).
     let response = app
         .clone()
         .oneshot(get_request("/products?category=beverages", Some(&token)))
