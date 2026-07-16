@@ -6,6 +6,7 @@ use axum::{
     http::StatusCode,
     response::Response,
 };
+use serde::Deserialize;
 
 use crate::audit::{AuditAction, AuditLogRepository, ResourceType};
 use crate::customers::CustomerRepository;
@@ -22,13 +23,73 @@ use super::model::{
 use super::repository::ProductRepository;
 use super::service;
 
+/// Optional `?category=` filter for `GET /products`. A separate `Query`
+/// extractor from `PaginationQuery` rather than folding `category` into
+/// that struct — `pagination` stays a small, reusable module shared by
+/// four different list endpoints, none of which otherwise know about
+/// products. Axum lets a handler take more than one `Query<T>`; each just
+/// ignores whatever fields aren't its own.
+#[derive(Debug, Deserialize)]
+pub struct ProductFilterQuery {
+    pub category: Option<String>,
+}
+
 /// `tenant_id` is NOT taken from the path/URL — always from the already
 /// verified token (`AuthUser`). So there's no "wrong tenant_id" to try,
 /// because the client is never asked to send it.
 ///
 /// Paginated via `?limit=&offset=` (see `pagination` module) — the total
-/// count before slicing is returned in the `X-Total-Count` header.
+/// count before slicing (i.e. after the `?category=` filter, if any) is
+/// returned in the `X-Total-Count` header. Optionally filtered via
+/// `?category=`, matched case-insensitively so `?category=beverages` and
+/// `?category=Beverages` behave the same.
 pub async fn list_products<TR, PR, OR, UR, AR, CR>(
+    auth_user: AuthUser,
+    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR>>>,
+    Query(pagination): Query<PaginationQuery>,
+    Query(filter): Query<ProductFilterQuery>,
+) -> Result<Response>
+where
+    TR: TenantRepository,
+    PR: ProductRepository,
+    OR: OrderRepository,
+    UR: UserRepository,
+    AR: AuditLogRepository,
+    CR: CustomerRepository,
+{
+    let mut products = service::list_products(
+        &state.products,
+        &state.tenants,
+        &auth_user.tenant_id,
+    )
+    .await?;
+
+    if let Some(category) = &filter.category {
+        products.retain(|product| {
+            product.category.eq_ignore_ascii_case(category.trim())
+        });
+    }
+
+    let can_see_cost_price =
+        matches!(auth_user.role, Role::Owner | Role::Admin);
+    let response: Vec<ProductResponse> = products
+        .into_iter()
+        .map(|product| {
+            ProductResponse::from_product(product, can_see_cost_price)
+        })
+        .collect();
+
+    Ok(paginated_response(response, &pagination))
+}
+
+/// Products at or below their own `low_stock_threshold` (see
+/// `Product::low_stock_threshold`), so a manager can see at a glance what
+/// needs reordering without scanning the full catalog. Open to any role
+/// (same as `list_products`) rather than `ManagerUser` — it exposes no
+/// pricing/margin data, just stock counts, and a Cashier noticing a
+/// product is about to run out is exactly the kind of thing worth
+/// surfacing to them too.
+pub async fn list_low_stock_products<TR, PR, OR, UR, AR, CR>(
     auth_user: AuthUser,
     State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR>>>,
     Query(pagination): Query<PaginationQuery>,
@@ -41,7 +102,7 @@ where
     AR: AuditLogRepository,
     CR: CustomerRepository,
 {
-    let products = service::list_products(
+    let products = service::list_low_stock_products(
         &state.products,
         &state.tenants,
         &auth_user.tenant_id,

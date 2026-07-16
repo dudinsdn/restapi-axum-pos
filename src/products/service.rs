@@ -3,7 +3,10 @@ use crate::error::{AppError, Result};
 use crate::tenants::TenantRepository;
 use crate::users::Actor;
 
-use super::model::{CreateProductRequest, Product, UpdateProductRequest};
+use super::model::{
+    CreateProductRequest, Product, UpdateProductRequest, DEFAULT_CATEGORY,
+    DEFAULT_LOW_STOCK_THRESHOLD,
+};
 use super::repository::ProductRepository;
 
 pub async fn list_products<PR, TR>(
@@ -17,6 +20,28 @@ where
 {
     ensure_tenant_exists(tenants, tenant_id).await?;
     Ok(products.list_by_tenant(tenant_id).await)
+}
+
+/// Products at or below their own `low_stock_threshold` — see
+/// `Product::low_stock_threshold` for why that's per-product rather than
+/// one tenant-wide number. Reuses `list_products` rather than adding a
+/// repository method, since filtering a tenant's (typically modest-sized)
+/// catalog in memory is simple and the repository trait stays unchanged
+/// either way.
+pub async fn list_low_stock_products<PR, TR>(
+    products: &PR,
+    tenants: &TR,
+    tenant_id: &str,
+) -> Result<Vec<Product>>
+where
+    PR: ProductRepository,
+    TR: TenantRepository,
+{
+    let all = list_products(products, tenants, tenant_id).await?;
+    Ok(all
+        .into_iter()
+        .filter(|product| product.stock <= product.low_stock_threshold)
+        .collect())
 }
 
 pub async fn create_product<PR, TR>(
@@ -36,6 +61,12 @@ where
     validate_price("price", payload.price)?;
     validate_price("cost_price", payload.cost_price)?;
     validate_stock(payload.stock)?;
+    if let Some(category) = &payload.category {
+        validate_category(category)?;
+    }
+    if let Some(threshold) = payload.low_stock_threshold {
+        validate_low_stock_threshold(threshold)?;
+    }
 
     let product = Product {
         id: format!("prod-{}", uuid::Uuid::new_v4().simple()),
@@ -45,6 +76,12 @@ where
         price: payload.price,
         cost_price: payload.cost_price,
         stock: payload.stock,
+        category: payload
+            .category
+            .unwrap_or_else(|| DEFAULT_CATEGORY.to_string()),
+        low_stock_threshold: payload
+            .low_stock_threshold
+            .unwrap_or(DEFAULT_LOW_STOCK_THRESHOLD),
         created_by: actor,
     };
 
@@ -110,6 +147,28 @@ pub async fn update_product<PR: ProductRepository>(
                 new_value: stock.to_string(),
             });
             product.stock = stock;
+        }
+    }
+    if let Some(category) = payload.category {
+        validate_category(&category)?;
+        if category != product.category {
+            changes.push(FieldChange {
+                field: "category".to_string(),
+                old_value: product.category.clone(),
+                new_value: category.clone(),
+            });
+            product.category = category;
+        }
+    }
+    if let Some(threshold) = payload.low_stock_threshold {
+        validate_low_stock_threshold(threshold)?;
+        if threshold != product.low_stock_threshold {
+            changes.push(FieldChange {
+                field: "low_stock_threshold".to_string(),
+                old_value: product.low_stock_threshold.to_string(),
+                new_value: threshold.to_string(),
+            });
+            product.low_stock_threshold = threshold;
         }
     }
     // `created_by` is intentionally never changed — it always records who
@@ -192,6 +251,24 @@ fn validate_price(field_name: &str, value: i64) -> Result<()> {
 fn validate_stock(stock: i32) -> Result<()> {
     if stock < 0 {
         return Err(AppError::BadRequest("stock must not be negative".into()));
+    }
+    Ok(())
+}
+
+fn validate_category(category: &str) -> Result<()> {
+    if category.trim().is_empty() {
+        return Err(AppError::BadRequest(
+            "category must not be empty".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_low_stock_threshold(threshold: i32) -> Result<()> {
+    if threshold < 0 {
+        return Err(AppError::BadRequest(
+            "low_stock_threshold must not be negative".into(),
+        ));
     }
     Ok(())
 }

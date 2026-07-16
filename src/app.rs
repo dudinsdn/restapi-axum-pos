@@ -64,6 +64,19 @@ where
                 .post(products::handler::create_product::<TR, PR, OR, UR, AR, CR>),
         )
         .route(
+            "/products/low-stock",
+            get(
+                products::handler::list_low_stock_products::<
+                    TR,
+                    PR,
+                    OR,
+                    UR,
+                    AR,
+                    CR,
+                >,
+            ),
+        )
+        .route(
             "/products/:product_id",
             axum::routing::patch(
                 products::handler::update_product::<TR, PR, OR, UR, AR, CR>,

@@ -2103,3 +2103,277 @@ fn now_unix() -> u64 {
         .map(|duration| duration.as_secs())
         .unwrap_or(0)
 }
+
+#[tokio::test]
+async fn product_without_category_defaults_to_uncategorized() {
+    let app = test_app();
+    let (token, _tenant_id) =
+        register(&app, "toko-budi", "budi@example.com").await;
+
+    // The `create_product` test helper never sends `category` or
+    // `low_stock_threshold`, so this also doubles as regression coverage
+    // that every OTHER existing test creating a product still works
+    // unchanged now that those fields exist.
+    create_product(&app, &token, "SKU-001", 10_000, 6_000, 5).await;
+
+    let response = app
+        .oneshot(get_request("/products", Some(&token)))
+        .await
+        .unwrap();
+    let products = body_json(response).await;
+    assert_eq!(products[0]["category"], "Uncategorized");
+    assert_eq!(products[0]["low_stock_threshold"], 5);
+}
+
+#[tokio::test]
+async fn create_product_accepts_explicit_category_and_threshold() {
+    let app = test_app();
+    let (token, _tenant_id) =
+        register(&app, "toko-budi", "budi@example.com").await;
+
+    let response = app
+        .clone()
+        .oneshot(json_request(
+            "POST",
+            "/products",
+            Some(&token),
+            serde_json::json!({
+                "name": "Es Teh",
+                "sku": "SKU-DRINK-001",
+                "price": 5_000,
+                "cost_price": 2_000,
+                "stock": 20,
+                "category": "Beverages",
+                "low_stock_threshold": 10
+            }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let created = body_json(response).await;
+    assert_eq!(created["category"], "Beverages");
+    assert_eq!(created["low_stock_threshold"], 10);
+}
+
+#[tokio::test]
+async fn create_product_rejects_blank_category_and_negative_threshold() {
+    let app = test_app();
+    let (token, _tenant_id) =
+        register(&app, "toko-budi", "budi@example.com").await;
+
+    let blank_category = app
+        .clone()
+        .oneshot(json_request(
+            "POST",
+            "/products",
+            Some(&token),
+            serde_json::json!({
+                "name": "Produk A",
+                "sku": "SKU-001",
+                "price": 1000,
+                "cost_price": 500,
+                "stock": 5,
+                "category": "   "
+            }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(blank_category.status(), StatusCode::BAD_REQUEST);
+
+    let negative_threshold = app
+        .oneshot(json_request(
+            "POST",
+            "/products",
+            Some(&token),
+            serde_json::json!({
+                "name": "Produk A",
+                "sku": "SKU-001",
+                "price": 1000,
+                "cost_price": 500,
+                "stock": 5,
+                "low_stock_threshold": -1
+            }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(negative_threshold.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn update_product_can_change_category_and_it_is_audited() {
+    let app = test_app();
+    let (token, _tenant_id) =
+        register(&app, "toko-budi", "budi@example.com").await;
+    let product_id =
+        create_product(&app, &token, "SKU-001", 10_000, 6_000, 5).await;
+
+    let response = app
+        .clone()
+        .oneshot(json_request(
+            "PATCH",
+            &format!("/products/{product_id}"),
+            Some(&token),
+            serde_json::json!({ "category": "Snacks" }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let updated = body_json(response).await;
+    assert_eq!(updated["category"], "Snacks");
+
+    let logs_response = app
+        .oneshot(get_request("/tenants/me/audit-logs", Some(&token)))
+        .await
+        .unwrap();
+    let logs = body_json(logs_response).await;
+    let category_change = logs[0]["changes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|change| change["field"] == "category")
+        .expect("expected a category change entry");
+    assert_eq!(category_change["old_value"], "Uncategorized");
+    assert_eq!(category_change["new_value"], "Snacks");
+}
+
+#[tokio::test]
+async fn list_products_can_be_filtered_by_category() {
+    let app = test_app();
+    let (token, _tenant_id) =
+        register(&app, "toko-budi", "budi@example.com").await;
+
+    for (sku, category) in
+        [("SKU-A", "Beverages"), ("SKU-B", "Beverages"), ("SKU-C", "Snacks")]
+    {
+        app.clone()
+            .oneshot(json_request(
+                "POST",
+                "/products",
+                Some(&token),
+                serde_json::json!({
+                    "name": format!("Produk {sku}"),
+                    "sku": sku,
+                    "price": 5_000,
+                    "cost_price": 2_000,
+                    "stock": 10,
+                    "category": category
+                }),
+            ))
+            .await
+            .unwrap();
+    }
+
+    // Filter is case-insensitive.
+    let response = app
+        .clone()
+        .oneshot(get_request(
+            "/products?category=beverages",
+            Some(&token),
+        ))
+        .await
+        .unwrap();
+    let filtered = body_json(response).await;
+    let filtered = filtered.as_array().unwrap();
+    assert_eq!(filtered.len(), 2);
+    assert!(filtered.iter().all(|product| product["category"] == "Beverages"));
+
+    let unfiltered = body_json(
+        app.oneshot(get_request("/products", Some(&token)))
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(unfiltered.as_array().unwrap().len(), 3);
+}
+
+#[tokio::test]
+async fn low_stock_endpoint_returns_only_products_at_or_below_threshold() {
+    let app = test_app();
+    let (token, _tenant_id) =
+        register(&app, "toko-budi", "budi@example.com").await;
+
+    // Below its own threshold (2 <= 5) -> should show up.
+    app.clone()
+        .oneshot(json_request(
+            "POST",
+            "/products",
+            Some(&token),
+            serde_json::json!({
+                "name": "Produk Low",
+                "sku": "SKU-LOW",
+                "price": 5_000,
+                "cost_price": 2_000,
+                "stock": 2,
+                "low_stock_threshold": 5
+            }),
+        ))
+        .await
+        .unwrap();
+
+    // Well above its own threshold -> should NOT show up.
+    app.clone()
+        .oneshot(json_request(
+            "POST",
+            "/products",
+            Some(&token),
+            serde_json::json!({
+                "name": "Produk High",
+                "sku": "SKU-HIGH",
+                "price": 5_000,
+                "cost_price": 2_000,
+                "stock": 100,
+                "low_stock_threshold": 5
+            }),
+        ))
+        .await
+        .unwrap();
+
+    let response = app
+        .oneshot(get_request("/products/low-stock", Some(&token)))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let low_stock = body_json(response).await;
+    let low_stock = low_stock.as_array().unwrap();
+    assert_eq!(low_stock.len(), 1);
+    assert_eq!(low_stock[0]["sku"], "SKU-LOW");
+}
+
+#[tokio::test]
+async fn low_stock_endpoint_is_visible_to_cashier_but_hides_cost_price() {
+    let app = test_app();
+    let (owner_token, _tenant_id) =
+        register(&app, "toko-budi", "budi@example.com").await;
+    app.clone()
+        .oneshot(json_request(
+            "POST",
+            "/products",
+            Some(&owner_token),
+            serde_json::json!({
+                "name": "Produk Low",
+                "sku": "SKU-LOW",
+                "price": 5_000,
+                "cost_price": 2_000,
+                "stock": 1,
+                "low_stock_threshold": 5
+            }),
+        ))
+        .await
+        .unwrap();
+    let cashier_token = invite_and_login(
+        &app,
+        &owner_token,
+        "kasir@example.com",
+        "cashier",
+    )
+    .await;
+
+    let response = app
+        .oneshot(get_request("/products/low-stock", Some(&cashier_token)))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let low_stock = body_json(response).await;
+    assert_eq!(low_stock[0]["sku"], "SKU-LOW");
+    assert!(low_stock[0].get("cost_price").is_none());
+}
