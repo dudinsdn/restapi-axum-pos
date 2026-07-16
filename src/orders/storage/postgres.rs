@@ -3,8 +3,8 @@ use sqlx::types::Json;
 
 use crate::users::Actor;
 
-use super::model::{Order, OrderItem};
-use super::repository::OrderRepository;
+use super::super::model::{Order, OrderItem};
+use super::super::repository::OrderRepository;
 
 #[derive(Debug, Clone, sqlx::FromRow)]
 struct OrderRow {

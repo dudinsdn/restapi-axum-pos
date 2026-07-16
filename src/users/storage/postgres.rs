@@ -1,7 +1,7 @@
 use sqlx::PgPool;
 
-use super::model::{Role, User};
-use super::repository::UserRepository;
+use super::super::model::{Role, User};
+use super::super::repository::UserRepository;
 
 #[derive(Debug, Clone, sqlx::FromRow)]
 struct UserRow {

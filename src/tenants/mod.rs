@@ -1,9 +1,11 @@
 pub mod handler;
 pub mod model;
-pub mod postgres;
 pub mod repository;
 pub mod service;
+pub mod storage;
 
 pub use model::Tenant;
-pub use postgres::PgTenantRepository;
-pub use repository::{InMemoryTenantRepository, TenantRepository};
+pub use repository::TenantRepository;
+pub use storage::{
+    inmemory::InMemoryTenantRepository, postgres::PgTenantRepository,
+};

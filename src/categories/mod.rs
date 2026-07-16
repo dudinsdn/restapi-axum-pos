@@ -1,9 +1,11 @@
 pub mod handler;
 pub mod model;
-pub mod postgres;
 pub mod repository;
 pub mod service;
+pub mod storage;
 
 pub use model::{Category, CreateCategoryRequest, UpdateCategoryRequest};
-pub use postgres::PgCategoryRepository;
-pub use repository::{CategoryRepository, InMemoryCategoryRepository};
+pub use repository::CategoryRepository;
+pub use storage::{
+    inmemory::InMemoryCategoryRepository, postgres::PgCategoryRepository,
+};

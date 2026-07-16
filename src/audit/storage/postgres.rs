@@ -3,8 +3,10 @@ use sqlx::types::Json;
 
 use crate::users::Actor;
 
-use super::model::{AuditAction, AuditLogEntry, FieldChange, ResourceType};
-use super::repository::AuditLogRepository;
+use super::super::model::{
+    AuditAction, AuditLogEntry, FieldChange, ResourceType,
+};
+use super::super::repository::AuditLogRepository;
 
 #[derive(Debug, Clone, sqlx::FromRow)]
 struct AuditLogRow {

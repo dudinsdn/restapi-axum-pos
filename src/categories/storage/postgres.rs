@@ -3,8 +3,8 @@ use sqlx::types::Json;
 
 use crate::users::Actor;
 
-use super::model::Category;
-use super::repository::CategoryRepository;
+use super::super::model::Category;
+use super::super::repository::CategoryRepository;
 
 #[derive(Debug, Clone, sqlx::FromRow)]
 struct CategoryRow {

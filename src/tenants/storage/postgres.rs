@@ -1,7 +1,7 @@
 use sqlx::PgPool;
 
-use super::model::Tenant;
-use super::repository::TenantRepository;
+use super::super::model::Tenant;
+use super::super::repository::TenantRepository;
 
 #[derive(Debug, Clone, sqlx::FromRow)]
 struct TenantRow {

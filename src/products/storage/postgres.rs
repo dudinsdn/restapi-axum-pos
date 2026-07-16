@@ -3,8 +3,8 @@ use sqlx::types::Json;
 
 use crate::users::Actor;
 
-use super::model::Product;
-use super::repository::ProductRepository;
+use super::super::model::Product;
+use super::super::repository::ProductRepository;
 
 #[derive(Debug, Clone, sqlx::FromRow)]
 struct ProductRow {
