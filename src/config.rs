@@ -20,9 +20,10 @@ impl Config {
 
         let jwt_secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| {
             tracing::warn!(
-                "JWT_SECRET tidak di-set — pakai secret default yang HANYA aman untuk \
-                 development. WAJIB di-set lewat environment variable sebelum deploy ke \
-                 production, kalau tidak semua token bisa dipalsukan."
+                "JWT_SECRET is not set — use the default secret, which is \
+                ONLY secure for development. It MUST be set via an \
+                environment variable before deploying to production, \
+                otherwise all tokens can be forged."
             );
             "dev-only-insecure-secret-change-me".to_string()
         });
