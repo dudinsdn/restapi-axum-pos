@@ -8,6 +8,7 @@ use axum::{
 };
 
 use crate::audit::{AuditAction, AuditLogRepository, ResourceType};
+use crate::categories::CategoryRepository;
 use crate::customers::CustomerRepository;
 use crate::error::Result;
 use crate::pagination::{PaginationQuery, paginated_response};
@@ -25,9 +26,9 @@ use super::service;
 ///
 /// Paginated via `?limit=&offset=` (see `pagination` module) — the total
 /// count before slicing is returned in the `X-Total-Count` header.
-pub async fn list_orders<TR, PR, OR, UR, AR, CR>(
+pub async fn list_orders<TR, PR, OR, UR, AR, CR, KR>(
     auth_user: AuthUser,
-    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR>>>,
+    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR, KR>>>,
     Query(pagination): Query<PaginationQuery>,
 ) -> Result<Response>
 where
@@ -37,6 +38,7 @@ where
     UR: UserRepository,
     AR: AuditLogRepository,
     CR: CustomerRepository,
+    KR: CategoryRepository,
 {
     let orders = service::list_orders(
         &state.orders,
@@ -64,9 +66,9 @@ where
 /// still both slip through (the check-then-create isn't atomic) — see
 /// `IdempotencyStore` for the tradeoffs of the current in-memory
 /// implementation.
-pub async fn create_order<TR, PR, OR, UR, AR, CR>(
+pub async fn create_order<TR, PR, OR, UR, AR, CR, KR>(
     auth_user: AuthUser,
-    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR>>>,
+    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR, KR>>>,
     headers: HeaderMap,
     Json(payload): Json<CreateOrderRequest>,
 ) -> Result<(StatusCode, Json<OrderResponse>)>
@@ -77,6 +79,7 @@ where
     UR: UserRepository,
     AR: AuditLogRepository,
     CR: CustomerRepository,
+    KR: CategoryRepository,
 {
     let idempotency_key = headers
         .get("Idempotency-Key")
@@ -136,10 +139,10 @@ where
 /// Owner and Admin can cancel an order — Cashier cannot, so they can't cover up
 /// a transaction that was already made (e.g. creating an order and then
 /// cancelling it themselves to hide a cash sale).
-pub async fn cancel_order<TR, PR, OR, UR, AR, CR>(
+pub async fn cancel_order<TR, PR, OR, UR, AR, CR, KR>(
     ManagerUser(auth_user): ManagerUser,
     Path(order_id): Path<String>,
-    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR>>>,
+    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR, KR>>>,
 ) -> Result<StatusCode>
 where
     TR: TenantRepository,
@@ -148,6 +151,7 @@ where
     UR: UserRepository,
     AR: AuditLogRepository,
     CR: CustomerRepository,
+    KR: CategoryRepository,
 {
     let order = service::cancel_order(
         &state.orders,

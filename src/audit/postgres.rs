@@ -59,6 +59,7 @@ fn resource_type_to_str(resource_type: ResourceType) -> &'static str {
         ResourceType::Product => "product",
         ResourceType::Order => "order",
         ResourceType::Customer => "customer",
+        ResourceType::Category => "category",
     }
 }
 
@@ -66,7 +67,8 @@ fn resource_type_from_str(value: &str) -> ResourceType {
     match value {
         "product" => ResourceType::Product,
         "order" => ResourceType::Order,
-        _ => ResourceType::Customer,
+        "customer" => ResourceType::Customer,
+        _ => ResourceType::Category,
     }
 }
 

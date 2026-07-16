@@ -4,8 +4,8 @@ use crate::tenants::TenantRepository;
 use crate::users::Actor;
 
 use super::model::{
-    CreateProductRequest, Product, UpdateProductRequest, DEFAULT_CATEGORY,
-    DEFAULT_LOW_STOCK_THRESHOLD,
+    CreateProductRequest, DEFAULT_CATEGORY, DEFAULT_LOW_STOCK_THRESHOLD,
+    Product, UpdateProductRequest,
 };
 use super::repository::ProductRepository;
 
@@ -257,9 +257,7 @@ fn validate_stock(stock: i32) -> Result<()> {
 
 fn validate_category(category: &str) -> Result<()> {
     if category.trim().is_empty() {
-        return Err(AppError::BadRequest(
-            "category must not be empty".into(),
-        ));
+        return Err(AppError::BadRequest("category must not be empty".into()));
     }
     Ok(())
 }

@@ -8,6 +8,7 @@ use axum::{
 };
 
 use crate::audit::{AuditAction, AuditLogRepository, ResourceType};
+use crate::categories::CategoryRepository;
 use crate::error::Result;
 use crate::orders::OrderRepository;
 use crate::pagination::{PaginationQuery, paginated_response};
@@ -25,9 +26,9 @@ use super::service;
 ///
 /// Paginated via `?limit=&offset=` (see `pagination` module) — the total
 /// count before slicing is returned in the `X-Total-Count` header.
-pub async fn list_customers<TR, PR, OR, UR, AR, CR>(
+pub async fn list_customers<TR, PR, OR, UR, AR, CR, KR>(
     auth_user: AuthUser,
-    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR>>>,
+    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR, KR>>>,
     Query(pagination): Query<PaginationQuery>,
 ) -> Result<Response>
 where
@@ -37,6 +38,7 @@ where
     UR: UserRepository,
     AR: AuditLogRepository,
     CR: CustomerRepository,
+    KR: CategoryRepository,
 {
     let customers = service::list_customers(
         &state.customers,
@@ -48,10 +50,10 @@ where
 }
 
 /// All roles can view a single customer's detail.
-pub async fn get_customer<TR, PR, OR, UR, AR, CR>(
+pub async fn get_customer<TR, PR, OR, UR, AR, CR, KR>(
     auth_user: AuthUser,
     Path(customer_id): Path<String>,
-    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR>>>,
+    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR, KR>>>,
 ) -> Result<Json<Customer>>
 where
     TR: TenantRepository,
@@ -60,6 +62,7 @@ where
     UR: UserRepository,
     AR: AuditLogRepository,
     CR: CustomerRepository,
+    KR: CategoryRepository,
 {
     let customer = service::get_customer(
         &state.customers,
@@ -72,9 +75,9 @@ where
 
 /// All roles can register a new customer — a cashier often registers a
 /// customer on the spot during their first transaction.
-pub async fn create_customer<TR, PR, OR, UR, AR, CR>(
+pub async fn create_customer<TR, PR, OR, UR, AR, CR, KR>(
     auth_user: AuthUser,
-    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR>>>,
+    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR, KR>>>,
     Json(payload): Json<CreateCustomerRequest>,
 ) -> Result<(StatusCode, Json<Customer>)>
 where
@@ -84,6 +87,7 @@ where
     UR: UserRepository,
     AR: AuditLogRepository,
     CR: CustomerRepository,
+    KR: CategoryRepository,
 {
     let actor = Actor::from(&auth_user);
     let customer = service::create_customer(
@@ -112,10 +116,10 @@ where
 
 /// All roles can update a customer's contact info (e.g. a cashier fixing a
 /// wrong phone number/address while serving the customer).
-pub async fn update_customer<TR, PR, OR, UR, AR, CR>(
+pub async fn update_customer<TR, PR, OR, UR, AR, CR, KR>(
     auth_user: AuthUser,
     Path(customer_id): Path<String>,
-    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR>>>,
+    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR, KR>>>,
     Json(payload): Json<UpdateCustomerRequest>,
 ) -> Result<Json<Customer>>
 where
@@ -125,6 +129,7 @@ where
     UR: UserRepository,
     AR: AuditLogRepository,
     CR: CustomerRepository,
+    KR: CategoryRepository,
 {
     let (customer, changes) = service::update_customer(
         &state.customers,
@@ -154,10 +159,10 @@ where
 /// Only Owner and Admin can delete a customer — this is a destructive,
 /// permanent action, so it's not allowed for Cashier even though they can
 /// create & edit customer data day-to-day.
-pub async fn delete_customer<TR, PR, OR, UR, AR, CR>(
+pub async fn delete_customer<TR, PR, OR, UR, AR, CR, KR>(
     ManagerUser(auth_user): ManagerUser,
     Path(customer_id): Path<String>,
-    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR>>>,
+    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR, KR>>>,
 ) -> Result<StatusCode>
 where
     TR: TenantRepository,
@@ -166,6 +171,7 @@ where
     UR: UserRepository,
     AR: AuditLogRepository,
     CR: CustomerRepository,
+    KR: CategoryRepository,
 {
     let customer = service::delete_customer(
         &state.customers,

@@ -3,6 +3,7 @@ use std::net::SocketAddr;
 use restapi_axum_pos::{
     app::create_app,
     audit::{InMemoryAuditLogRepository, PgAuditLogRepository},
+    categories::{InMemoryCategoryRepository, PgCategoryRepository},
     config::Config,
     customers::{InMemoryCustomerRepository, PgCustomerRepository},
     orders::{InMemoryOrderRepository, PgOrderRepository},
@@ -52,7 +53,8 @@ async fn main() {
             PgOrderRepository::new(pool.clone()),
             PgUserRepository::new(pool.clone()),
             PgAuditLogRepository::new(pool.clone()),
-            PgCustomerRepository::new(pool),
+            PgCustomerRepository::new(pool.clone()),
+            PgCategoryRepository::new(pool),
             config.jwt_secret.clone(),
         );
         create_app(state)
@@ -64,6 +66,7 @@ async fn main() {
             InMemoryUserRepository::new(),
             InMemoryAuditLogRepository::new(),
             InMemoryCustomerRepository::new(),
+            InMemoryCategoryRepository::new(),
             config.jwt_secret.clone(),
         );
         create_app(state)

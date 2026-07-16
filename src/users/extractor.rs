@@ -5,6 +5,7 @@ use axum::http::header::AUTHORIZATION;
 use axum::http::request::Parts;
 
 use crate::audit::AuditLogRepository;
+use crate::categories::CategoryRepository;
 use crate::customers::CustomerRepository;
 use crate::error::{AppError, Result};
 use crate::orders::OrderRepository;
@@ -38,8 +39,8 @@ impl From<&AuthUser> for Actor {
 }
 
 #[async_trait::async_trait]
-impl<TR, PR, OR, UR, AR, CR>
-    FromRequestParts<Arc<AppState<TR, PR, OR, UR, AR, CR>>> for AuthUser
+impl<TR, PR, OR, UR, AR, CR, KR>
+    FromRequestParts<Arc<AppState<TR, PR, OR, UR, AR, CR, KR>>> for AuthUser
 where
     TR: TenantRepository,
     PR: ProductRepository,
@@ -47,12 +48,13 @@ where
     UR: UserRepository,
     AR: AuditLogRepository,
     CR: CustomerRepository,
+    KR: CategoryRepository,
 {
     type Rejection = AppError;
 
     async fn from_request_parts(
         parts: &mut Parts,
-        state: &Arc<AppState<TR, PR, OR, UR, AR, CR>>,
+        state: &Arc<AppState<TR, PR, OR, UR, AR, CR, KR>>,
     ) -> Result<Self> {
         let header = parts
             .headers
@@ -110,8 +112,8 @@ impl From<&OwnerUser> for Actor {
 }
 
 #[async_trait::async_trait]
-impl<TR, PR, OR, UR, AR, CR>
-    FromRequestParts<Arc<AppState<TR, PR, OR, UR, AR, CR>>> for OwnerUser
+impl<TR, PR, OR, UR, AR, CR, KR>
+    FromRequestParts<Arc<AppState<TR, PR, OR, UR, AR, CR, KR>>> for OwnerUser
 where
     TR: TenantRepository,
     PR: ProductRepository,
@@ -119,12 +121,13 @@ where
     UR: UserRepository,
     AR: AuditLogRepository,
     CR: CustomerRepository,
+    KR: CategoryRepository,
 {
     type Rejection = AppError;
 
     async fn from_request_parts(
         parts: &mut Parts,
-        state: &Arc<AppState<TR, PR, OR, UR, AR, CR>>,
+        state: &Arc<AppState<TR, PR, OR, UR, AR, CR, KR>>,
     ) -> Result<Self> {
         let auth_user = AuthUser::from_request_parts(parts, state).await?;
 
@@ -160,8 +163,8 @@ impl From<&ManagerUser> for Actor {
 }
 
 #[async_trait::async_trait]
-impl<TR, PR, OR, UR, AR, CR>
-    FromRequestParts<Arc<AppState<TR, PR, OR, UR, AR, CR>>> for ManagerUser
+impl<TR, PR, OR, UR, AR, CR, KR>
+    FromRequestParts<Arc<AppState<TR, PR, OR, UR, AR, CR, KR>>> for ManagerUser
 where
     TR: TenantRepository,
     PR: ProductRepository,
@@ -169,12 +172,13 @@ where
     UR: UserRepository,
     AR: AuditLogRepository,
     CR: CustomerRepository,
+    KR: CategoryRepository,
 {
     type Rejection = AppError;
 
     async fn from_request_parts(
         parts: &mut Parts,
-        state: &Arc<AppState<TR, PR, OR, UR, AR, CR>>,
+        state: &Arc<AppState<TR, PR, OR, UR, AR, CR, KR>>,
     ) -> Result<Self> {
         let auth_user = AuthUser::from_request_parts(parts, state).await?;
 

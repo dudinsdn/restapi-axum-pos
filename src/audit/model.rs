@@ -16,6 +16,7 @@ pub enum ResourceType {
     Product,
     Order,
     Customer,
+    Category,
 }
 
 /// A single field that changed during an update: value before & after.

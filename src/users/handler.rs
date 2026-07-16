@@ -3,6 +3,7 @@ use std::sync::Arc;
 use axum::{Json, extract::State, http::StatusCode};
 
 use crate::audit::AuditLogRepository;
+use crate::categories::CategoryRepository;
 use crate::customers::CustomerRepository;
 use crate::error::Result;
 use crate::orders::OrderRepository;
@@ -18,8 +19,8 @@ use super::model::{
 use super::repository::UserRepository;
 use super::service;
 
-pub async fn register<TR, PR, OR, UR, AR, CR>(
-    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR>>>,
+pub async fn register<TR, PR, OR, UR, AR, CR, KR>(
+    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR, KR>>>,
     Json(payload): Json<RegisterRequest>,
 ) -> Result<(StatusCode, Json<AuthResponse>)>
 where
@@ -29,6 +30,7 @@ where
     UR: UserRepository,
     AR: AuditLogRepository,
     CR: CustomerRepository,
+    KR: CategoryRepository,
 {
     let (_tenant, user) =
         service::register(&state.users, &state.tenants, payload).await?;
@@ -43,8 +45,8 @@ where
     ))
 }
 
-pub async fn login<TR, PR, OR, UR, AR, CR>(
-    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR>>>,
+pub async fn login<TR, PR, OR, UR, AR, CR, KR>(
+    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR, KR>>>,
     Json(payload): Json<LoginRequest>,
 ) -> Result<Json<AuthResponse>>
 where
@@ -54,6 +56,7 @@ where
     UR: UserRepository,
     AR: AuditLogRepository,
     CR: CustomerRepository,
+    KR: CategoryRepository,
 {
     let user = service::login(&state.users, &state.login_rate_limiter, payload)
         .await?;
@@ -65,9 +68,9 @@ where
     }))
 }
 
-pub async fn logout<TR, PR, OR, UR, AR, CR>(
+pub async fn logout<TR, PR, OR, UR, AR, CR, KR>(
     auth_user: AuthUser,
-    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR>>>,
+    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR, KR>>>,
 ) -> StatusCode
 where
     TR: TenantRepository,
@@ -76,6 +79,7 @@ where
     UR: UserRepository,
     AR: AuditLogRepository,
     CR: CustomerRepository,
+    KR: CategoryRepository,
 {
     state.revoked_tokens.revoke(&auth_user.token_id);
     StatusCode::NO_CONTENT
@@ -83,9 +87,9 @@ where
 
 /// Only the owner can invite a new user — and the owner chooses
 /// their role (`Admin` or `Cashier`) via the `role` field in the body.
-pub async fn invite_staff<TR, PR, OR, UR, AR, CR>(
+pub async fn invite_staff<TR, PR, OR, UR, AR, CR, KR>(
     OwnerUser(auth_user): OwnerUser,
-    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR>>>,
+    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR, KR>>>,
     Json(payload): Json<InviteStaffRequest>,
 ) -> Result<(StatusCode, Json<PublicUser>)>
 where
@@ -95,6 +99,7 @@ where
     UR: UserRepository,
     AR: AuditLogRepository,
     CR: CustomerRepository,
+    KR: CategoryRepository,
 {
     let user =
         service::invite_staff(&state.users, &auth_user.tenant_id, payload)

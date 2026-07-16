@@ -9,6 +9,7 @@ use axum::{
 use serde::Deserialize;
 
 use crate::audit::{AuditAction, AuditLogRepository, ResourceType};
+use crate::categories::CategoryRepository;
 use crate::customers::CustomerRepository;
 use crate::error::Result;
 use crate::orders::OrderRepository;
@@ -43,9 +44,9 @@ pub struct ProductFilterQuery {
 /// returned in the `X-Total-Count` header. Optionally filtered via
 /// `?category=`, matched case-insensitively so `?category=beverages` and
 /// `?category=Beverages` behave the same.
-pub async fn list_products<TR, PR, OR, UR, AR, CR>(
+pub async fn list_products<TR, PR, OR, UR, AR, CR, KR>(
     auth_user: AuthUser,
-    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR>>>,
+    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR, KR>>>,
     Query(pagination): Query<PaginationQuery>,
     Query(filter): Query<ProductFilterQuery>,
 ) -> Result<Response>
@@ -56,6 +57,7 @@ where
     UR: UserRepository,
     AR: AuditLogRepository,
     CR: CustomerRepository,
+    KR: CategoryRepository,
 {
     let mut products = service::list_products(
         &state.products,
@@ -89,9 +91,9 @@ where
 /// pricing/margin data, just stock counts, and a Cashier noticing a
 /// product is about to run out is exactly the kind of thing worth
 /// surfacing to them too.
-pub async fn list_low_stock_products<TR, PR, OR, UR, AR, CR>(
+pub async fn list_low_stock_products<TR, PR, OR, UR, AR, CR, KR>(
     auth_user: AuthUser,
-    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR>>>,
+    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR, KR>>>,
     Query(pagination): Query<PaginationQuery>,
 ) -> Result<Response>
 where
@@ -101,6 +103,7 @@ where
     UR: UserRepository,
     AR: AuditLogRepository,
     CR: CustomerRepository,
+    KR: CategoryRepository,
 {
     let products = service::list_low_stock_products(
         &state.products,
@@ -123,9 +126,9 @@ where
 
 /// Owner and Admin can add products to the catalog — Cashier can only
 /// view & sell, not manage stock/price.
-pub async fn create_product<TR, PR, OR, UR, AR, CR>(
+pub async fn create_product<TR, PR, OR, UR, AR, CR, KR>(
     ManagerUser(auth_user): ManagerUser,
-    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR>>>,
+    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR, KR>>>,
     Json(payload): Json<CreateProductRequest>,
 ) -> Result<(StatusCode, Json<ProductResponse>)>
 where
@@ -135,6 +138,7 @@ where
     UR: UserRepository,
     AR: AuditLogRepository,
     CR: CustomerRepository,
+    KR: CategoryRepository,
 {
     let actor = Actor::from(&auth_user);
     let product = service::create_product(
@@ -167,10 +171,10 @@ where
 }
 
 /// Owner and Admin can update product data (price, stock, etc).
-pub async fn update_product<TR, PR, OR, UR, AR, CR>(
+pub async fn update_product<TR, PR, OR, UR, AR, CR, KR>(
     ManagerUser(auth_user): ManagerUser,
     Path(product_id): Path<String>,
-    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR>>>,
+    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR, KR>>>,
     Json(payload): Json<UpdateProductRequest>,
 ) -> Result<Json<ProductResponse>>
 where
@@ -180,6 +184,7 @@ where
     UR: UserRepository,
     AR: AuditLogRepository,
     CR: CustomerRepository,
+    KR: CategoryRepository,
 {
     let (product, changes) = service::update_product(
         &state.products,
@@ -211,10 +216,10 @@ where
 }
 
 /// Owner and Admin can delete a product from the catalog.
-pub async fn delete_product<TR, PR, OR, UR, AR, CR>(
+pub async fn delete_product<TR, PR, OR, UR, AR, CR, KR>(
     ManagerUser(auth_user): ManagerUser,
     Path(product_id): Path<String>,
-    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR>>>,
+    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR, KR>>>,
 ) -> Result<StatusCode>
 where
     TR: TenantRepository,
@@ -223,6 +228,7 @@ where
     UR: UserRepository,
     AR: AuditLogRepository,
     CR: CustomerRepository,
+    KR: CategoryRepository,
 {
     let product = service::delete_product(
         &state.products,

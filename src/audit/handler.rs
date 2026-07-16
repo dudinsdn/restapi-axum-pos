@@ -5,6 +5,7 @@ use axum::{
     response::Response,
 };
 
+use crate::categories::CategoryRepository;
 use crate::customers::CustomerRepository;
 use crate::error::Result;
 use crate::orders::OrderRepository;
@@ -23,9 +24,9 @@ use super::repository::AuditLogRepository;
 /// count before slicing is returned in the `X-Total-Count` header. Worth
 /// using here in particular: this log is append-only and never trimmed, so
 /// it only grows over the tenant's lifetime.
-pub async fn list_audit_logs<TR, PR, OR, UR, AR, CR>(
+pub async fn list_audit_logs<TR, PR, OR, UR, AR, CR, KR>(
     ManagerUser(auth_user): ManagerUser,
-    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR>>>,
+    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR, KR>>>,
     Query(pagination): Query<PaginationQuery>,
 ) -> Result<Response>
 where
@@ -35,6 +36,7 @@ where
     UR: UserRepository,
     AR: AuditLogRepository,
     CR: CustomerRepository,
+    KR: CategoryRepository,
 {
     let logs = state.audit.list_by_tenant(&auth_user.tenant_id).await;
     Ok(paginated_response(logs, &pagination))

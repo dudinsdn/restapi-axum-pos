@@ -5,6 +5,7 @@ pub mod pagination;
 pub mod state;
 
 pub mod audit;
+pub mod categories;
 pub mod customers;
 pub mod orders;
 pub mod products;

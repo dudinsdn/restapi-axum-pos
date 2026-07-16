@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::audit::AuditLogRepository;
+use crate::categories::CategoryRepository;
 use crate::customers::CustomerRepository;
 use crate::orders::{IdempotencyStore, OrderRepository};
 use crate::products::ProductRepository;
@@ -14,20 +15,21 @@ use crate::users::{LoginRateLimiter, TokenRevocationList, UserRepository};
 /// compile time. If the backend is swapped later (e.g. Postgres), just
 /// build a new impl of the same trait and change the concrete type in
 /// `main.rs`, without touching the handler or service.
-pub struct AppState<TR, PR, OR, UR, AR, CR> {
+pub struct AppState<TR, PR, OR, UR, AR, CR, KR> {
     pub tenants: TR,
     pub products: PR,
     pub orders: OR,
     pub users: UR,
     pub audit: AR,
     pub customers: CR,
+    pub categories: KR,
     pub jwt_secret: String,
     pub login_rate_limiter: Arc<LoginRateLimiter>,
     pub revoked_tokens: Arc<TokenRevocationList>,
     pub idempotency_store: Arc<IdempotencyStore>,
 }
 
-impl<TR, PR, OR, UR, AR, CR> AppState<TR, PR, OR, UR, AR, CR>
+impl<TR, PR, OR, UR, AR, CR, KR> AppState<TR, PR, OR, UR, AR, CR, KR>
 where
     TR: TenantRepository,
     PR: ProductRepository,
@@ -35,6 +37,7 @@ where
     UR: UserRepository,
     AR: AuditLogRepository,
     CR: CustomerRepository,
+    KR: CategoryRepository,
 {
     pub fn new(
         tenants: TR,
@@ -43,6 +46,7 @@ where
         users: UR,
         audit: AR,
         customers: CR,
+        categories: KR,
         jwt_secret: String,
     ) -> Arc<Self> {
         Arc::new(Self {
@@ -52,6 +56,7 @@ where
             users,
             audit,
             customers,
+            categories,
             jwt_secret,
             login_rate_limiter: Arc::new(LoginRateLimiter::new()),
             revoked_tokens: Arc::new(TokenRevocationList::new()),
