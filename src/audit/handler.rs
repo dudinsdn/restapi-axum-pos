@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use axum::{
     extract::{Query, State},
     response::Response,
@@ -11,7 +9,7 @@ use crate::error::Result;
 use crate::orders::OrderRepository;
 use crate::pagination::{PaginationQuery, paginated_response};
 use crate::products::ProductRepository;
-use crate::state::AppState;
+use crate::state::DynState;
 use crate::tenants::TenantRepository;
 use crate::users::{ManagerUser, UserRepository};
 
@@ -26,7 +24,7 @@ use super::repository::AuditLogRepository;
 /// it only grows over the tenant's lifetime.
 pub async fn list_audit_logs<TR, PR, OR, UR, AR, CR, KR>(
     ManagerUser(auth_user): ManagerUser,
-    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR, KR>>>,
+    State(state): State<DynState<TR, PR, OR, UR, AR, CR, KR>>,
     Query(pagination): Query<PaginationQuery>,
 ) -> Result<Response>
 where

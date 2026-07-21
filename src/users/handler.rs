@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use axum::{Json, extract::State, http::StatusCode};
 
 use crate::audit::AuditLogRepository;
@@ -8,7 +6,7 @@ use crate::customers::CustomerRepository;
 use crate::error::Result;
 use crate::orders::OrderRepository;
 use crate::products::ProductRepository;
-use crate::state::AppState;
+use crate::state::DynState;
 use crate::tenants::TenantRepository;
 
 use super::extractor::{AuthUser, OwnerUser};
@@ -20,7 +18,7 @@ use super::repository::UserRepository;
 use super::service;
 
 pub async fn register<TR, PR, OR, UR, AR, CR, KR>(
-    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR, KR>>>,
+    State(state): State<DynState<TR, PR, OR, UR, AR, CR, KR>>,
     Json(payload): Json<RegisterRequest>,
 ) -> Result<(StatusCode, Json<AuthResponse>)>
 where
@@ -46,7 +44,7 @@ where
 }
 
 pub async fn login<TR, PR, OR, UR, AR, CR, KR>(
-    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR, KR>>>,
+    State(state): State<DynState<TR, PR, OR, UR, AR, CR, KR>>,
     Json(payload): Json<LoginRequest>,
 ) -> Result<Json<AuthResponse>>
 where
@@ -70,7 +68,7 @@ where
 
 pub async fn logout<TR, PR, OR, UR, AR, CR, KR>(
     auth_user: AuthUser,
-    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR, KR>>>,
+    State(state): State<DynState<TR, PR, OR, UR, AR, CR, KR>>,
 ) -> StatusCode
 where
     TR: TenantRepository,
@@ -89,7 +87,7 @@ where
 /// their role (`Admin` or `Cashier`) via the `role` field in the body.
 pub async fn invite_staff<TR, PR, OR, UR, AR, CR, KR>(
     OwnerUser(auth_user): OwnerUser,
-    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR, KR>>>,
+    State(state): State<DynState<TR, PR, OR, UR, AR, CR, KR>>,
     Json(payload): Json<InviteStaffRequest>,
 ) -> Result<(StatusCode, Json<PublicUser>)>
 where

@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use axum::{
     Json,
     extract::{Path, Query, State},
@@ -14,7 +12,7 @@ use crate::customers::CustomerRepository;
 use crate::error::Result;
 use crate::orders::OrderRepository;
 use crate::pagination::{PaginationQuery, paginated_response};
-use crate::state::AppState;
+use crate::state::DynState;
 use crate::tenants::TenantRepository;
 use crate::users::{Actor, AuthUser, ManagerUser, Role, UserRepository};
 
@@ -46,7 +44,7 @@ pub struct ProductFilterQuery {
 /// `?category=Beverages` behave the same.
 pub async fn list_products<TR, PR, OR, UR, AR, CR, KR>(
     auth_user: AuthUser,
-    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR, KR>>>,
+    State(state): State<DynState<TR, PR, OR, UR, AR, CR, KR>>,
     Query(pagination): Query<PaginationQuery>,
     Query(filter): Query<ProductFilterQuery>,
 ) -> Result<Response>
@@ -93,7 +91,7 @@ where
 /// surfacing to them too.
 pub async fn list_low_stock_products<TR, PR, OR, UR, AR, CR, KR>(
     auth_user: AuthUser,
-    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR, KR>>>,
+    State(state): State<DynState<TR, PR, OR, UR, AR, CR, KR>>,
     Query(pagination): Query<PaginationQuery>,
 ) -> Result<Response>
 where
@@ -128,7 +126,7 @@ where
 /// view & sell, not manage stock/price.
 pub async fn create_product<TR, PR, OR, UR, AR, CR, KR>(
     ManagerUser(auth_user): ManagerUser,
-    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR, KR>>>,
+    State(state): State<DynState<TR, PR, OR, UR, AR, CR, KR>>,
     Json(payload): Json<CreateProductRequest>,
 ) -> Result<(StatusCode, Json<ProductResponse>)>
 where
@@ -175,7 +173,7 @@ where
 pub async fn update_product<TR, PR, OR, UR, AR, CR, KR>(
     ManagerUser(auth_user): ManagerUser,
     Path(product_id): Path<String>,
-    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR, KR>>>,
+    State(state): State<DynState<TR, PR, OR, UR, AR, CR, KR>>,
     Json(payload): Json<UpdateProductRequest>,
 ) -> Result<Json<ProductResponse>>
 where
@@ -221,7 +219,7 @@ where
 pub async fn delete_product<TR, PR, OR, UR, AR, CR, KR>(
     ManagerUser(auth_user): ManagerUser,
     Path(product_id): Path<String>,
-    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR, KR>>>,
+    State(state): State<DynState<TR, PR, OR, UR, AR, CR, KR>>,
 ) -> Result<StatusCode>
 where
     TR: TenantRepository,

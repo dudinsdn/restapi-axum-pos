@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use axum::{
     Json,
     extract::{Path, Query, State},
@@ -13,7 +11,7 @@ use crate::error::Result;
 use crate::orders::OrderRepository;
 use crate::pagination::{PaginationQuery, paginated_response};
 use crate::products::ProductRepository;
-use crate::state::AppState;
+use crate::state::DynState;
 use crate::tenants::TenantRepository;
 use crate::users::{Actor, AuthUser, ManagerUser, UserRepository};
 
@@ -28,7 +26,7 @@ use super::service;
 /// count before slicing is returned in the `X-Total-Count` header.
 pub async fn list_customers<TR, PR, OR, UR, AR, CR, KR>(
     auth_user: AuthUser,
-    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR, KR>>>,
+    State(state): State<DynState<TR, PR, OR, UR, AR, CR, KR>>,
     Query(pagination): Query<PaginationQuery>,
 ) -> Result<Response>
 where
@@ -53,7 +51,7 @@ where
 pub async fn get_customer<TR, PR, OR, UR, AR, CR, KR>(
     auth_user: AuthUser,
     Path(customer_id): Path<String>,
-    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR, KR>>>,
+    State(state): State<DynState<TR, PR, OR, UR, AR, CR, KR>>,
 ) -> Result<Json<Customer>>
 where
     TR: TenantRepository,
@@ -77,7 +75,7 @@ where
 /// customer on the spot during their first transaction.
 pub async fn create_customer<TR, PR, OR, UR, AR, CR, KR>(
     auth_user: AuthUser,
-    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR, KR>>>,
+    State(state): State<DynState<TR, PR, OR, UR, AR, CR, KR>>,
     Json(payload): Json<CreateCustomerRequest>,
 ) -> Result<(StatusCode, Json<Customer>)>
 where
@@ -119,7 +117,7 @@ where
 pub async fn update_customer<TR, PR, OR, UR, AR, CR, KR>(
     auth_user: AuthUser,
     Path(customer_id): Path<String>,
-    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR, KR>>>,
+    State(state): State<DynState<TR, PR, OR, UR, AR, CR, KR>>,
     Json(payload): Json<UpdateCustomerRequest>,
 ) -> Result<Json<Customer>>
 where
@@ -162,7 +160,7 @@ where
 pub async fn delete_customer<TR, PR, OR, UR, AR, CR, KR>(
     ManagerUser(auth_user): ManagerUser,
     Path(customer_id): Path<String>,
-    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR, KR>>>,
+    State(state): State<DynState<TR, PR, OR, UR, AR, CR, KR>>,
 ) -> Result<StatusCode>
 where
     TR: TenantRepository,

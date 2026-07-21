@@ -29,6 +29,19 @@ pub struct AppState<TR, PR, OR, UR, AR, CR, KR> {
     pub idempotency_store: Arc<IdempotencyStore>,
 }
 
+pub type DynState<TR, PR, OR, UR, AR, CR, KR> =
+    Arc<AppState<TR, PR, OR, UR, AR, CR, KR>>;
+
+pub struct Repositories<TR, PR, OR, UR, AR, CR, KR> {
+    pub tenants: TR,
+    pub products: PR,
+    pub orders: OR,
+    pub users: UR,
+    pub audit: AR,
+    pub customers: CR,
+    pub categories: KR,
+}
+
 impl<TR, PR, OR, UR, AR, CR, KR> AppState<TR, PR, OR, UR, AR, CR, KR>
 where
     TR: TenantRepository,
@@ -40,23 +53,17 @@ where
     KR: CategoryRepository,
 {
     pub fn new(
-        tenants: TR,
-        products: PR,
-        orders: OR,
-        users: UR,
-        audit: AR,
-        customers: CR,
-        categories: KR,
+        repos: Repositories<TR, PR, OR, UR, AR, CR, KR>,
         jwt_secret: String,
     ) -> Arc<Self> {
         Arc::new(Self {
-            tenants,
-            products,
-            orders,
-            users,
-            audit,
-            customers,
-            categories,
+            tenants: repos.tenants,
+            products: repos.products,
+            orders: repos.orders,
+            users: repos.users,
+            audit: repos.audit,
+            customers: repos.customers,
+            categories: repos.categories,
             jwt_secret,
             login_rate_limiter: Arc::new(LoginRateLimiter::new()),
             revoked_tokens: Arc::new(TokenRevocationList::new()),

@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use axum::{
     Json,
     extract::{Query, State},
@@ -11,7 +9,7 @@ use crate::customers::CustomerRepository;
 use crate::error::Result;
 use crate::orders::OrderRepository;
 use crate::products::ProductRepository;
-use crate::state::AppState;
+use crate::state::DynState;
 use crate::tenants::TenantRepository;
 use crate::users::{OwnerUser, UserRepository};
 
@@ -26,7 +24,7 @@ use super::service;
 /// via `OwnerUser`.
 pub async fn profit_report<TR, PR, OR, UR, AR, CR, KR>(
     OwnerUser(auth_user): OwnerUser,
-    State(state): State<Arc<AppState<TR, PR, OR, UR, AR, CR, KR>>>,
+    State(state): State<DynState<TR, PR, OR, UR, AR, CR, KR>>,
     Query(query): Query<ProfitReportQuery>,
 ) -> Result<Json<ProfitReport>>
 where

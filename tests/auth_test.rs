@@ -68,7 +68,7 @@ async fn login_with_correct_credentials_returns_token(pool: sqlx::PgPool) {
 
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_json(response).await;
-    assert!(body["token"].as_str().unwrap().len() > 0);
+    assert!(!body["token"].as_str().unwrap().is_empty());
 }
 
 #[sqlx::test]
