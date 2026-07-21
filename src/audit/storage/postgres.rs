@@ -75,7 +75,7 @@ fn resource_type_from_str(value: &str) -> ResourceType {
 }
 
 /// Postgres-backed `AuditLogRepository`. Append-only, same as
-/// `InMemoryAuditLogRepository` — there's no `update`/`delete` here at
+/// the append-only design this replaced — there's no `update`/`delete` here at
 /// all, matching the trait.
 #[derive(Debug, Clone)]
 pub struct PgAuditLogRepository {

@@ -12,9 +12,9 @@ use common::{
     json_request, json_request_with_header, register, test_app,
 };
 
-#[tokio::test]
-async fn order_uses_real_product_price_and_reduces_stock() {
-    let app = test_app();
+#[sqlx::test]
+async fn order_uses_real_product_price_and_reduces_stock(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
     create_product(&app, &token, "SKU-001", 15_000, 9_000, 10).await;
@@ -43,9 +43,9 @@ async fn order_uses_real_product_price_and_reduces_stock() {
     assert_eq!(products[0]["stock"], 7);
 }
 
-#[tokio::test]
-async fn order_with_unknown_sku_returns_not_found() {
-    let app = test_app();
+#[sqlx::test]
+async fn order_with_unknown_sku_returns_not_found(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
     let customer_id = create_customer(&app, &token, "Budi").await;
@@ -62,9 +62,9 @@ async fn order_with_unknown_sku_returns_not_found() {
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
 }
 
-#[tokio::test]
-async fn order_fails_when_stock_insufficient() {
-    let app = test_app();
+#[sqlx::test]
+async fn order_fails_when_stock_insufficient(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
     create_product(&app, &token, "SKU-001", 15_000, 9_000, 2).await;
@@ -90,9 +90,9 @@ async fn order_fails_when_stock_insufficient() {
     assert_eq!(products[0]["stock"], 2);
 }
 
-#[tokio::test]
-async fn cancel_order_restores_stock_and_removes_order() {
-    let app = test_app();
+#[sqlx::test]
+async fn cancel_order_restores_stock_and_removes_order(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
     create_product(&app, &token, "SKU-001", 15_000, 9_000, 10).await;
@@ -151,10 +151,11 @@ async fn cancel_order_restores_stock_and_removes_order() {
     assert_eq!(orders.as_array().unwrap().len(), 0);
 }
 
-#[tokio::test]
-async fn order_unit_cost_is_hidden_from_cashier_but_visible_to_owner_and_admin()
-{
-    let app = test_app();
+#[sqlx::test]
+async fn order_unit_cost_is_hidden_from_cashier_but_visible_to_owner_and_admin(
+    pool: sqlx::PgPool,
+) {
+    let app = test_app(pool);
     let (owner_token, _tenant_id) =
         register(&app, "toko-budi", "owner@example.com").await;
     create_product(&app, &owner_token, "SKU-001", 15_000, 9_000, 10).await;
@@ -235,9 +236,9 @@ async fn order_unit_cost_is_hidden_from_cashier_but_visible_to_owner_and_admin()
     );
 }
 
-#[tokio::test]
-async fn admin_can_cancel_order_but_cashier_cannot() {
-    let app = test_app();
+#[sqlx::test]
+async fn admin_can_cancel_order_but_cashier_cannot(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (owner_token, _tenant_id) =
         register(&app, "toko-budi", "owner@example.com").await;
     create_product(&app, &owner_token, "SKU-001", 15_000, 9_000, 10).await;
@@ -292,9 +293,9 @@ async fn admin_can_cancel_order_but_cashier_cannot() {
     assert_eq!(admin_cancel.status(), StatusCode::NO_CONTENT);
 }
 
-#[tokio::test]
-async fn cashier_can_view_products_and_create_orders() {
-    let app = test_app();
+#[sqlx::test]
+async fn cashier_can_view_products_and_create_orders(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (owner_token, _tenant_id) =
         register(&app, "toko-budi", "owner@example.com").await;
     create_product(&app, &owner_token, "SKU-001", 15_000, 9_000, 10).await;
@@ -326,9 +327,9 @@ async fn cashier_can_view_products_and_create_orders() {
     assert_eq!(order_response.status(), StatusCode::CREATED);
 }
 
-#[tokio::test]
-async fn order_with_unknown_customer_id_returns_not_found() {
-    let app = test_app();
+#[sqlx::test]
+async fn order_with_unknown_customer_id_returns_not_found(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
     create_product(&app, &token, "SKU-001", 15_000, 9_000, 10).await;
@@ -344,9 +345,9 @@ async fn order_with_unknown_customer_id_returns_not_found() {
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
 }
 
-#[tokio::test]
-async fn order_cannot_use_customer_from_another_tenant() {
-    let app = test_app();
+#[sqlx::test]
+async fn order_cannot_use_customer_from_another_tenant(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (token_a, _) = register(&app, "toko-a", "a@example.com").await;
     let (token_b, _) = register(&app, "toko-b", "b@example.com").await;
     create_product(&app, &token_a, "SKU-001", 15_000, 9_000, 10).await;
@@ -363,9 +364,9 @@ async fn order_cannot_use_customer_from_another_tenant() {
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
 }
 
-#[tokio::test]
-async fn order_snapshots_cost_price_so_later_changes_dont_affect_history() {
-    let app = test_app();
+#[sqlx::test]
+async fn order_snapshots_cost_price_so_later_changes_dont_affect_history(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
     let product_id =
@@ -413,9 +414,9 @@ async fn order_snapshots_cost_price_so_later_changes_dont_affect_history() {
     assert_eq!(report["total_profit"], 16_000);
 }
 
-#[tokio::test]
-async fn create_order_rejects_zero_or_negative_quantity() {
-    let app = test_app();
+#[sqlx::test]
+async fn create_order_rejects_zero_or_negative_quantity(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
     create_product(&app, &token, "SKU-001", 10_000, 6_000, 5).await;
@@ -437,9 +438,9 @@ async fn create_order_rejects_zero_or_negative_quantity() {
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
 
-#[tokio::test]
-async fn create_order_with_same_idempotency_key_returns_same_order() {
-    let app = test_app();
+#[sqlx::test]
+async fn create_order_with_same_idempotency_key_returns_same_order(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
     create_product(&app, &token, "SKU-001", 10_000, 6_000, 5).await;
@@ -499,9 +500,9 @@ async fn create_order_with_same_idempotency_key_returns_same_order() {
     assert_eq!(products[0]["stock"], 3);
 }
 
-#[tokio::test]
-async fn create_order_without_idempotency_key_creates_separate_orders() {
-    let app = test_app();
+#[sqlx::test]
+async fn create_order_without_idempotency_key_creates_separate_orders(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
     create_product(&app, &token, "SKU-001", 10_000, 6_000, 5).await;

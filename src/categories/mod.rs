@@ -6,6 +6,4 @@ pub mod storage;
 
 pub use model::{Category, CreateCategoryRequest, UpdateCategoryRequest};
 pub use repository::CategoryRepository;
-pub use storage::{
-    inmemory::InMemoryCategoryRepository, postgres::PgCategoryRepository,
-};
+pub use storage::postgres::PgCategoryRepository;

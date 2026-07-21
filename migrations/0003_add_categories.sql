@@ -10,10 +10,8 @@ CREATE TABLE categories (
 
 CREATE INDEX idx_categories_tenant_id ON categories (tenant_id);
 
--- Case-insensitive uniqueness per tenant, matching
--- `InMemoryCategoryRepository::create`'s `eq_ignore_ascii_case` check —
--- a plain `UNIQUE (tenant_id, name)` would let "Snacks" and "snacks"
--- coexist as two different categories, which the in-memory backend
--- already refuses.
+-- Case-insensitive uniqueness per tenant — a plain `UNIQUE (tenant_id, name)`
+-- would let "Snacks" and "snacks" coexist as two different categories,
+-- which this index refuses.
 CREATE UNIQUE INDEX idx_categories_tenant_name_ci
     ON categories (tenant_id, LOWER(name));

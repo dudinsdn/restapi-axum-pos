@@ -12,9 +12,9 @@ use common::{
     json_request, register, test_app,
 };
 
-#[tokio::test]
-async fn product_and_order_record_who_created_them() {
-    let app = test_app();
+#[sqlx::test]
+async fn product_and_order_record_who_created_them(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
 
@@ -55,9 +55,9 @@ async fn product_and_order_record_who_created_them() {
     assert_eq!(order["created_by"]["name"], "Budi Owner");
 }
 
-#[tokio::test]
-async fn audit_log_records_create_update_and_delete() {
-    let app = test_app();
+#[sqlx::test]
+async fn audit_log_records_create_update_and_delete(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
     let product_id =
@@ -104,9 +104,9 @@ async fn audit_log_records_create_update_and_delete() {
     }
 }
 
-#[tokio::test]
-async fn audit_logs_are_isolated_per_tenant() {
-    let app = test_app();
+#[sqlx::test]
+async fn audit_logs_are_isolated_per_tenant(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (token_a, _) = register(&app, "toko-a", "a@example.com").await;
     let (token_b, _) = register(&app, "toko-b", "b@example.com").await;
 
@@ -120,9 +120,9 @@ async fn audit_logs_are_isolated_per_tenant() {
     assert_eq!(logs_b.as_array().unwrap().len(), 0);
 }
 
-#[tokio::test]
-async fn audit_log_records_field_level_changes_on_update() {
-    let app = test_app();
+#[sqlx::test]
+async fn audit_log_records_field_level_changes_on_update(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
     let product_id =
@@ -167,9 +167,9 @@ async fn audit_log_records_field_level_changes_on_update() {
     assert!(changes.iter().all(|c| c["field"] != "name"));
 }
 
-#[tokio::test]
-async fn noop_update_does_not_write_audit_entry() {
-    let app = test_app();
+#[sqlx::test]
+async fn noop_update_does_not_write_audit_entry(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
     let product_id =
@@ -198,9 +198,9 @@ async fn noop_update_does_not_write_audit_entry() {
     assert_eq!(logs.as_array().unwrap().len(), 1);
 }
 
-#[tokio::test]
-async fn audit_log_records_which_fields_changed() {
-    let app = test_app();
+#[sqlx::test]
+async fn audit_log_records_which_fields_changed(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
     let product_id =
@@ -247,9 +247,9 @@ async fn audit_log_records_which_fields_changed() {
     assert!(changes.iter().all(|c| c["field"] != "name"));
 }
 
-#[tokio::test]
-async fn no_op_update_does_not_create_audit_entry() {
-    let app = test_app();
+#[sqlx::test]
+async fn no_op_update_does_not_create_audit_entry(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
     let product_id =
@@ -277,9 +277,9 @@ async fn no_op_update_does_not_create_audit_entry() {
     assert_eq!(logs[0]["action"], "created");
 }
 
-#[tokio::test]
-async fn admin_can_view_audit_logs_but_cashier_cannot() {
-    let app = test_app();
+#[sqlx::test]
+async fn admin_can_view_audit_logs_but_cashier_cannot(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (owner_token, _tenant_id) =
         register(&app, "toko-budi", "owner@example.com").await;
     create_product(&app, &owner_token, "SKU-001", 15_000, 9_000, 10).await;

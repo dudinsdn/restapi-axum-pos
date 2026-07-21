@@ -10,6 +10,4 @@ pub use model::{
     CreateOrderRequest, Order, OrderItem, OrderItemResponse, OrderResponse,
 };
 pub use repository::OrderRepository;
-pub use storage::{
-    inmemory::InMemoryOrderRepository, postgres::PgOrderRepository,
-};
+pub use storage::postgres::PgOrderRepository;

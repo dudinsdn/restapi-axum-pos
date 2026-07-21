@@ -9,17 +9,17 @@ use common::{
     body_json, create_product, get_request, json_request, register, test_app,
 };
 
-#[tokio::test]
-async fn register_creates_tenant_and_owner_with_token() {
-    let app = test_app();
+#[sqlx::test]
+async fn register_creates_tenant_and_owner_with_token(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
     assert!(!token.is_empty());
 }
 
-#[tokio::test]
-async fn duplicate_slug_on_register_is_rejected() {
-    let app = test_app();
+#[sqlx::test]
+async fn duplicate_slug_on_register_is_rejected(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     register(&app, "toko-budi", "budi@example.com").await;
 
     let payload = serde_json::json!({
@@ -36,9 +36,9 @@ async fn duplicate_slug_on_register_is_rejected() {
     assert_eq!(response.status(), StatusCode::CONFLICT);
 }
 
-#[tokio::test]
-async fn duplicate_email_on_register_is_rejected() {
-    let app = test_app();
+#[sqlx::test]
+async fn duplicate_email_on_register_is_rejected(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     register(&app, "toko-budi", "budi@example.com").await;
 
     let payload = serde_json::json!({
@@ -55,9 +55,9 @@ async fn duplicate_email_on_register_is_rejected() {
     assert_eq!(response.status(), StatusCode::CONFLICT);
 }
 
-#[tokio::test]
-async fn login_with_correct_credentials_returns_token() {
-    let app = test_app();
+#[sqlx::test]
+async fn login_with_correct_credentials_returns_token(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     register(&app, "toko-budi", "budi@example.com").await;
 
     let payload = serde_json::json!({ "email": "budi@example.com", "password": "password123" });
@@ -71,9 +71,9 @@ async fn login_with_correct_credentials_returns_token() {
     assert!(body["token"].as_str().unwrap().len() > 0);
 }
 
-#[tokio::test]
-async fn login_with_wrong_password_is_unauthorized() {
-    let app = test_app();
+#[sqlx::test]
+async fn login_with_wrong_password_is_unauthorized(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     register(&app, "toko-budi", "budi@example.com").await;
 
     let payload = serde_json::json!({ "email": "budi@example.com", "password": "salah-password" });
@@ -85,9 +85,9 @@ async fn login_with_wrong_password_is_unauthorized() {
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 }
 
-#[tokio::test]
-async fn register_persists_tenant_address() {
-    let app = test_app();
+#[sqlx::test]
+async fn register_persists_tenant_address(pool: sqlx::PgPool) {
+    let app = test_app(pool);
 
     let payload = serde_json::json!({
         "tenant_name": "Toko Budi",
@@ -117,9 +117,9 @@ async fn register_persists_tenant_address() {
     assert_eq!(tenant["address"], "Jl. Merdeka No. 10, Bandung");
 }
 
-#[tokio::test]
-async fn register_without_address_leaves_it_null() {
-    let app = test_app();
+#[sqlx::test]
+async fn register_without_address_leaves_it_null(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (token, _tenant_id) =
         register(&app, "toko-tanpa-alamat", "notaddr@example.com").await;
 
@@ -131,9 +131,9 @@ async fn register_without_address_leaves_it_null() {
     assert_eq!(tenant["address"], Value::Null);
 }
 
-#[tokio::test]
-async fn login_is_rate_limited_after_too_many_failures() {
-    let app = test_app();
+#[sqlx::test]
+async fn login_is_rate_limited_after_too_many_failures(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     register(&app, "toko-budi", "budi@example.com").await;
 
     for _ in 0..5 {
@@ -155,9 +155,9 @@ async fn login_is_rate_limited_after_too_many_failures() {
     assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
 }
 
-#[tokio::test]
-async fn logout_revokes_the_token() {
-    let app = test_app();
+#[sqlx::test]
+async fn logout_revokes_the_token(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
 
@@ -187,9 +187,9 @@ async fn logout_revokes_the_token() {
     assert_eq!(after.status(), StatusCode::UNAUTHORIZED);
 }
 
-#[tokio::test]
-async fn tenant_data_is_isolated_by_token_not_by_request() {
-    let app = test_app();
+#[sqlx::test]
+async fn tenant_data_is_isolated_by_token_not_by_request(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (token_a, _tenant_a) = register(&app, "toko-a", "a@example.com").await;
     let (token_b, _tenant_b) = register(&app, "toko-b", "b@example.com").await;
 

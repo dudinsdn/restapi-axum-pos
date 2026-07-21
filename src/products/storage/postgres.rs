@@ -64,8 +64,8 @@ impl PgProductRepository {
 impl ProductRepository for PgProductRepository {
     async fn create(&self, product: Product) -> bool {
         // `(tenant_id, sku)` has a UNIQUE constraint, so the INSERT itself
-        // enforces the same rule `InMemoryProductRepository::create`
-        // enforces by hand under a write-lock.
+        // enforces the same uniqueness an application-level
+        // check-then-insert would need a lock to guarantee.
         sqlx::query(
             "INSERT INTO products \
              (id, tenant_id, name, sku, price, cost_price, stock, \

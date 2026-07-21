@@ -43,7 +43,7 @@ impl CategoryRepository for PgCategoryRepository {
         // `(tenant_id, LOWER(name))` has a UNIQUE constraint (see the
         // migration), so the INSERT itself enforces the same
         // case-insensitive uniqueness rule
-        // `InMemoryCategoryRepository::create` enforces under a
+        // an application-level check-then-insert would need a
         // write-lock.
         sqlx::query(
             "INSERT INTO categories (id, tenant_id, name, created_by) \

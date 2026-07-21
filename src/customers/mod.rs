@@ -6,6 +6,4 @@ pub mod storage;
 
 pub use model::{CreateCustomerRequest, Customer, UpdateCustomerRequest};
 pub use repository::CustomerRepository;
-pub use storage::{
-    inmemory::InMemoryCustomerRepository, postgres::PgCustomerRepository,
-};
+pub use storage::postgres::PgCustomerRepository;

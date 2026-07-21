@@ -18,7 +18,7 @@ CREATE TABLE users (
     tenant_id TEXT NOT NULL REFERENCES tenants (id),
     name TEXT NOT NULL,
     -- Email is globally unique (used as the login identity), not scoped
-    -- per tenant — same rule as `InMemoryUserRepository::create`.
+    -- per tenant, enforced by the database instead of application code.
     email TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
     role TEXT NOT NULL
@@ -40,8 +40,8 @@ CREATE TABLE products (
     -- columns — it's a denormalized snapshot, never queried by its own
     -- fields, only ever read back whole.
     created_by JSONB NOT NULL,
-    -- sku is unique per tenant, not globally — same rule as
-    -- `InMemoryProductRepository::create`.
+    -- sku is unique per tenant, not globally — enforced by the database
+    -- rather than an application-level check under a lock.
     UNIQUE (tenant_id, sku)
 );
 
@@ -55,8 +55,8 @@ CREATE TABLE customers (
     email TEXT,
     address TEXT,
     created_by JSONB NOT NULL,
-    -- phone is unique per tenant, not globally — same rule as
-    -- `InMemoryCustomerRepository::create`.
+    -- phone is unique per tenant, not globally — enforced by the database
+    -- rather than an application-level check under a lock.
     UNIQUE (tenant_id, phone)
 );
 

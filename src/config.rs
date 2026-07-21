@@ -3,12 +3,13 @@
 pub struct Config {
     pub port: u16,
     pub jwt_secret: String,
-    /// If set, the app connects to this Postgres instance and runs
-    /// migrations on startup instead of using the in-memory repositories.
-    /// See `main.rs` for how the choice is made — everything downstream
-    /// (handlers, services) is unaffected either way, since both options
-    /// implement the same repository traits.
-    pub database_url: Option<String>,
+    /// Postgres connection string — required. There's no in-memory
+    /// fallback: a single, always-tested backend is worth more than the
+    /// convenience of running without a database, since an in-memory
+    /// implementation that's never actually exercised by the same tests
+    /// that guard the code shipped to production isn't confidence, it's
+    /// just a second codebase to keep in sync by hand.
+    pub database_url: String,
 }
 
 impl Config {
@@ -28,25 +29,16 @@ impl Config {
             "dev-only-insecure-secret-change-me".to_string()
         });
 
-        let database_url = std::env::var("DATABASE_URL").ok().filter(|url| {
-            if url.trim().is_empty() {
-                tracing::warn!(
-                    "DATABASE_URL is set but empty — falling back to the \
-                     in-memory repositories."
-                );
-                false
-            } else {
-                true
-            }
-        });
-
-        if database_url.is_none() {
-            tracing::info!(
-                "DATABASE_URL not set — using in-memory repositories. Data \
-                 will NOT survive a restart. Set DATABASE_URL to a Postgres \
-                 connection string to persist data instead."
-            );
-        }
+        let database_url = std::env::var("DATABASE_URL")
+            .ok()
+            .filter(|url| !url.trim().is_empty())
+            .unwrap_or_else(|| {
+                panic!(
+                    "DATABASE_URL is required (e.g. \
+                     postgres://user:pass@localhost:5432/dbname) — see \
+                     env.example. There is no in-memory fallback."
+                )
+            });
 
         Self {
             port,

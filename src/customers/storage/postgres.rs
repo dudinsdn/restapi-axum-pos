@@ -48,7 +48,7 @@ impl CustomerRepository for PgCustomerRepository {
     async fn create(&self, customer: Customer) -> bool {
         // `(tenant_id, phone)` has a UNIQUE constraint, so the INSERT
         // itself enforces the same rule
-        // `InMemoryCustomerRepository::create` enforces under a write-lock.
+        // an application-level check-then-insert would need a lock for.
         sqlx::query(
             "INSERT INTO customers \
              (id, tenant_id, name, phone, email, address, created_by) \

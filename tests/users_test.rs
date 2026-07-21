@@ -6,9 +6,9 @@ use tower::ServiceExt;
 
 use common::{body_json, invite_and_login, json_request, register, test_app};
 
-#[tokio::test]
-async fn owner_can_invite_admin_and_cashier_and_both_can_login() {
-    let app = test_app();
+#[sqlx::test]
+async fn owner_can_invite_admin_and_cashier_and_both_can_login(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (owner_token, _tenant_id) =
         register(&app, "toko-budi", "owner@example.com").await;
 
@@ -57,9 +57,9 @@ async fn owner_can_invite_admin_and_cashier_and_both_can_login() {
     assert_eq!(login_response.status(), StatusCode::OK);
 }
 
-#[tokio::test]
-async fn cannot_invite_a_second_owner() {
-    let app = test_app();
+#[sqlx::test]
+async fn cannot_invite_a_second_owner(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (owner_token, _tenant_id) =
         register(&app, "toko-budi", "owner@example.com").await;
 
@@ -80,9 +80,9 @@ async fn cannot_invite_a_second_owner() {
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
 
-#[tokio::test]
-async fn only_owner_can_invite_new_users() {
-    let app = test_app();
+#[sqlx::test]
+async fn only_owner_can_invite_new_users(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (owner_token, _tenant_id) =
         register(&app, "toko-budi", "owner@example.com").await;
     let admin_token =

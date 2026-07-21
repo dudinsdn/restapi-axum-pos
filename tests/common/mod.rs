@@ -9,22 +9,26 @@ use serde_json::Value;
 use tower::ServiceExt;
 
 use restapi_axum_pos::{
-    app::create_app, audit::InMemoryAuditLogRepository,
-    categories::InMemoryCategoryRepository,
-    customers::InMemoryCustomerRepository, orders::InMemoryOrderRepository,
-    products::InMemoryProductRepository, state::AppState,
-    tenants::InMemoryTenantRepository, users::InMemoryUserRepository,
+    app::create_app, audit::PgAuditLogRepository,
+    categories::PgCategoryRepository, customers::PgCustomerRepository,
+    orders::PgOrderRepository, products::PgProductRepository,
+    state::AppState, tenants::PgTenantRepository, users::PgUserRepository,
 };
 
-pub fn test_app() -> Router {
+/// Builds the app against a real Postgres test database. The `PgPool` is
+/// injected by `#[sqlx::test]` — one fresh, migrated database per test
+/// function, so tests are fully isolated from each other and (unlike the
+/// in-memory backend this replaced) actually exercise the same
+/// `Pg*Repository` code that runs in production.
+pub fn test_app(pool: sqlx::PgPool) -> Router {
     let state = AppState::new(
-        InMemoryTenantRepository::new(),
-        InMemoryProductRepository::new(),
-        InMemoryOrderRepository::new(),
-        InMemoryUserRepository::new(),
-        InMemoryAuditLogRepository::new(),
-        InMemoryCustomerRepository::new(),
-        InMemoryCategoryRepository::new(),
+        PgTenantRepository::new(pool.clone()),
+        PgProductRepository::new(pool.clone()),
+        PgOrderRepository::new(pool.clone()),
+        PgUserRepository::new(pool.clone()),
+        PgAuditLogRepository::new(pool.clone()),
+        PgCustomerRepository::new(pool.clone()),
+        PgCategoryRepository::new(pool),
         "test-secret".to_string(),
     );
     create_app(state)

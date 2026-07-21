@@ -9,9 +9,9 @@ use common::{
     json_request, now_unix, register, test_app,
 };
 
-#[tokio::test]
-async fn profit_report_computes_totals_and_per_product_breakdown() {
-    let app = test_app();
+#[sqlx::test]
+async fn profit_report_computes_totals_and_per_product_breakdown(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
     create_product(&app, &token, "SKU-A", 10_000, 6_000, 10).await;
@@ -62,9 +62,9 @@ async fn profit_report_computes_totals_and_per_product_breakdown() {
     assert_eq!(by_product[1]["profit"], 16_000);
 }
 
-#[tokio::test]
-async fn profit_report_is_owner_only() {
-    let app = test_app();
+#[sqlx::test]
+async fn profit_report_is_owner_only(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (owner_token, _tenant_id) =
         register(&app, "toko-budi", "owner@example.com").await;
     create_product(&app, &owner_token, "SKU-001", 15_000, 9_000, 10).await;
@@ -107,9 +107,9 @@ async fn profit_report_is_owner_only() {
     assert_eq!(owner_response.status(), StatusCode::OK);
 }
 
-#[tokio::test]
-async fn profit_report_can_be_filtered_by_date_range() {
-    let app = test_app();
+#[sqlx::test]
+async fn profit_report_can_be_filtered_by_date_range(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
     create_product(&app, &token, "SKU-001", 15_000, 9_000, 10).await;

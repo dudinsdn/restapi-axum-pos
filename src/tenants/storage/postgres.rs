@@ -22,11 +22,11 @@ impl From<TenantRow> for Tenant {
     }
 }
 
-/// Postgres-backed `TenantRepository`. Behaviorally identical to
-/// `InMemoryTenantRepository` — same uniqueness rules, same return values
-/// — so swapping between them (see `main.rs`) is purely a matter of which
-/// one gets constructed at startup; nothing upstream (handlers, services)
-/// needs to change.
+/// Postgres-backed `TenantRepository`. Implements the same
+/// `TenantRepository` trait as any other backend would — same uniqueness
+/// rules, same return values — so swapping backends (see `main.rs`) is
+/// purely a matter of which one gets constructed at startup; nothing
+/// upstream (handlers, services) needs to change.
 #[derive(Debug, Clone)]
 pub struct PgTenantRepository {
     pool: PgPool,

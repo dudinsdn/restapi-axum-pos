@@ -6,6 +6,4 @@ pub mod storage;
 
 pub use model::Tenant;
 pub use repository::TenantRepository;
-pub use storage::{
-    inmemory::InMemoryTenantRepository, postgres::PgTenantRepository,
-};
+pub use storage::postgres::PgTenantRepository;

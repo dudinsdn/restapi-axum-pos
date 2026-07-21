@@ -6,6 +6,4 @@ pub mod storage;
 
 pub use model::{AuditAction, AuditLogEntry, FieldChange, ResourceType};
 pub use repository::AuditLogRepository;
-pub use storage::{
-    inmemory::InMemoryAuditLogRepository, postgres::PgAuditLogRepository,
-};
+pub use storage::postgres::PgAuditLogRepository;

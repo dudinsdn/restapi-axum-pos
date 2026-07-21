@@ -12,18 +12,18 @@ use common::{
     register, test_app,
 };
 
-#[tokio::test]
-async fn products_endpoint_requires_auth() {
-    let app = test_app();
+#[sqlx::test]
+async fn products_endpoint_requires_auth(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     register(&app, "toko-budi", "budi@example.com").await;
 
     let response = app.oneshot(get_request("/products", None)).await.unwrap();
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 }
 
-#[tokio::test]
-async fn duplicate_sku_is_rejected() {
-    let app = test_app();
+#[sqlx::test]
+async fn duplicate_sku_is_rejected(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
     create_product(&app, &token, "SKU-001", 10_000, 6_000, 5).await;
@@ -43,9 +43,9 @@ async fn duplicate_sku_is_rejected() {
     assert_eq!(response.status(), StatusCode::CONFLICT);
 }
 
-#[tokio::test]
-async fn update_product_changes_fields() {
-    let app = test_app();
+#[sqlx::test]
+async fn update_product_changes_fields(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
     let product_id =
@@ -71,9 +71,9 @@ async fn update_product_changes_fields() {
     assert_eq!(updated["sku"], "SKU-001");
 }
 
-#[tokio::test]
-async fn cannot_update_other_tenants_product() {
-    let app = test_app();
+#[sqlx::test]
+async fn cannot_update_other_tenants_product(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (token_a, _) = register(&app, "toko-a", "a@example.com").await;
     let (token_b, _) = register(&app, "toko-b", "b@example.com").await;
     let product_id =
@@ -93,9 +93,9 @@ async fn cannot_update_other_tenants_product() {
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
 }
 
-#[tokio::test]
-async fn delete_product_removes_it_from_list() {
-    let app = test_app();
+#[sqlx::test]
+async fn delete_product_removes_it_from_list(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
     let product_id =
@@ -123,9 +123,9 @@ async fn delete_product_removes_it_from_list() {
     assert_eq!(products.as_array().unwrap().len(), 0);
 }
 
-#[tokio::test]
-async fn cost_price_is_hidden_from_cashier_but_visible_to_owner_and_admin() {
-    let app = test_app();
+#[sqlx::test]
+async fn cost_price_is_hidden_from_cashier_but_visible_to_owner_and_admin(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (owner_token, _tenant_id) =
         register(&app, "toko-budi", "owner@example.com").await;
     create_product(&app, &owner_token, "SKU-001", 15_000, 9_000, 10).await;
@@ -164,9 +164,9 @@ async fn cost_price_is_hidden_from_cashier_but_visible_to_owner_and_admin() {
     assert!(cashier_products[0].get("cost_price").is_none());
 }
 
-#[tokio::test]
-async fn admin_can_manage_product_catalog_but_cashier_cannot() {
-    let app = test_app();
+#[sqlx::test]
+async fn admin_can_manage_product_catalog_but_cashier_cannot(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (owner_token, _tenant_id) =
         register(&app, "toko-budi", "owner@example.com").await;
     let admin_token =
@@ -260,9 +260,9 @@ async fn admin_can_manage_product_catalog_but_cashier_cannot() {
     assert_eq!(admin_delete.status(), StatusCode::NO_CONTENT);
 }
 
-#[tokio::test]
-async fn update_product_can_change_cost_price_and_it_is_audited() {
-    let app = test_app();
+#[sqlx::test]
+async fn update_product_can_change_cost_price_and_it_is_audited(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
     let product_id =
@@ -299,9 +299,9 @@ async fn update_product_can_change_cost_price_and_it_is_audited() {
     assert_eq!(cost_change["new_value"], "7000");
 }
 
-#[tokio::test]
-async fn create_product_rejects_negative_price() {
-    let app = test_app();
+#[sqlx::test]
+async fn create_product_rejects_negative_price(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
 
@@ -324,9 +324,9 @@ async fn create_product_rejects_negative_price() {
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
 
-#[tokio::test]
-async fn create_product_rejects_negative_stock() {
-    let app = test_app();
+#[sqlx::test]
+async fn create_product_rejects_negative_stock(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
 
@@ -349,9 +349,9 @@ async fn create_product_rejects_negative_stock() {
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
 
-#[tokio::test]
-async fn create_product_rejects_empty_name_and_sku() {
-    let app = test_app();
+#[sqlx::test]
+async fn create_product_rejects_empty_name_and_sku(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
 
@@ -391,9 +391,9 @@ async fn create_product_rejects_empty_name_and_sku() {
     assert_eq!(empty_sku.status(), StatusCode::BAD_REQUEST);
 }
 
-#[tokio::test]
-async fn update_product_rejects_negative_cost_price() {
-    let app = test_app();
+#[sqlx::test]
+async fn update_product_rejects_negative_cost_price(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
     let product_id =
@@ -412,9 +412,9 @@ async fn update_product_rejects_negative_cost_price() {
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
 
-#[tokio::test]
-async fn list_products_is_paginated_via_limit_and_offset() {
-    let app = test_app();
+#[sqlx::test]
+async fn list_products_is_paginated_via_limit_and_offset(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
     for i in 0..5 {
@@ -457,9 +457,9 @@ async fn list_products_is_paginated_via_limit_and_offset() {
     assert_eq!(default_page.as_array().unwrap().len(), 5);
 }
 
-#[tokio::test]
-async fn product_without_category_defaults_to_uncategorized() {
-    let app = test_app();
+#[sqlx::test]
+async fn product_without_category_defaults_to_uncategorized(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
 
@@ -478,9 +478,9 @@ async fn product_without_category_defaults_to_uncategorized() {
     assert_eq!(products[0]["low_stock_threshold"], 5);
 }
 
-#[tokio::test]
-async fn create_product_accepts_explicit_category_and_threshold() {
-    let app = test_app();
+#[sqlx::test]
+async fn create_product_accepts_explicit_category_and_threshold(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
 
@@ -524,9 +524,9 @@ async fn create_product_accepts_explicit_category_and_threshold() {
     assert_eq!(created["low_stock_threshold"], 10);
 }
 
-#[tokio::test]
-async fn create_product_rejects_unknown_category_id_and_negative_threshold() {
-    let app = test_app();
+#[sqlx::test]
+async fn create_product_rejects_unknown_category_id_and_negative_threshold(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
 
@@ -568,9 +568,9 @@ async fn create_product_rejects_unknown_category_id_and_negative_threshold() {
     assert_eq!(negative_threshold.status(), StatusCode::BAD_REQUEST);
 }
 
-#[tokio::test]
-async fn update_product_can_change_category_and_it_is_audited() {
-    let app = test_app();
+#[sqlx::test]
+async fn update_product_can_change_category_and_it_is_audited(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
     let product_id =
@@ -621,9 +621,9 @@ async fn update_product_can_change_category_and_it_is_audited() {
     assert_eq!(category_change["new_value"], "Snacks");
 }
 
-#[tokio::test]
-async fn list_products_can_be_filtered_by_category() {
-    let app = test_app();
+#[sqlx::test]
+async fn list_products_can_be_filtered_by_category(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
 
@@ -694,9 +694,9 @@ async fn list_products_can_be_filtered_by_category() {
     assert_eq!(unfiltered.as_array().unwrap().len(), 3);
 }
 
-#[tokio::test]
-async fn low_stock_endpoint_returns_only_products_at_or_below_threshold() {
-    let app = test_app();
+#[sqlx::test]
+async fn low_stock_endpoint_returns_only_products_at_or_below_threshold(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
 
@@ -747,9 +747,9 @@ async fn low_stock_endpoint_returns_only_products_at_or_below_threshold() {
     assert_eq!(low_stock[0]["sku"], "SKU-LOW");
 }
 
-#[tokio::test]
-async fn low_stock_endpoint_is_visible_to_cashier_but_hides_cost_price() {
-    let app = test_app();
+#[sqlx::test]
+async fn low_stock_endpoint_is_visible_to_cashier_but_hides_cost_price(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (owner_token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
     app.clone()

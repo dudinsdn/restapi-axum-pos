@@ -11,6 +11,4 @@ pub use extractor::{AuthUser, ManagerUser, OwnerUser};
 pub use model::{Actor, Role, User};
 pub use repository::UserRepository;
 pub use session::{LoginRateLimiter, TokenRevocationList};
-pub use storage::{
-    inmemory::InMemoryUserRepository, postgres::PgUserRepository,
-};
+pub use storage::postgres::PgUserRepository;

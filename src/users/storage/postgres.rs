@@ -64,7 +64,7 @@ impl UserRepository for PgUserRepository {
     async fn create(&self, user: User) -> bool {
         // `email` has a UNIQUE constraint, so the INSERT itself enforces
         // the same global-uniqueness rule
-        // `InMemoryUserRepository::create` enforces under a write-lock.
+        // an application-level check-then-insert would need a lock for.
         sqlx::query(
             "INSERT INTO users (id, tenant_id, name, email, password_hash, role) \
              VALUES ($1, $2, $3, $4, $5, $6)",

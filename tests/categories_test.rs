@@ -8,9 +8,9 @@ use common::{
     body_json, get_request, invite_and_login, json_request, register, test_app,
 };
 
-#[tokio::test]
-async fn owner_can_create_list_update_and_delete_a_category() {
-    let app = test_app();
+#[sqlx::test]
+async fn owner_can_create_list_update_and_delete_a_category(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
 
@@ -100,9 +100,9 @@ async fn owner_can_create_list_update_and_delete_a_category() {
     assert_eq!(list_after_delete.as_array().unwrap().len(), 0);
 }
 
-#[tokio::test]
-async fn category_name_must_be_unique_per_tenant_case_insensitively() {
-    let app = test_app();
+#[sqlx::test]
+async fn category_name_must_be_unique_per_tenant_case_insensitively(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
 
@@ -128,9 +128,9 @@ async fn category_name_must_be_unique_per_tenant_case_insensitively() {
     assert_eq!(duplicate.status(), StatusCode::CONFLICT);
 }
 
-#[tokio::test]
-async fn create_category_rejects_blank_name() {
-    let app = test_app();
+#[sqlx::test]
+async fn create_category_rejects_blank_name(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
 
@@ -146,9 +146,9 @@ async fn create_category_rejects_blank_name() {
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
 
-#[tokio::test]
-async fn cashier_can_view_but_not_manage_categories() {
-    let app = test_app();
+#[sqlx::test]
+async fn cashier_can_view_but_not_manage_categories(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (owner_token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
     let create_response = app
@@ -225,9 +225,9 @@ async fn cashier_can_view_but_not_manage_categories() {
     assert_eq!(delete_attempt.status(), StatusCode::FORBIDDEN);
 }
 
-#[tokio::test]
-async fn category_products_endpoint_looks_up_products_by_category() {
-    let app = test_app();
+#[sqlx::test]
+async fn category_products_endpoint_looks_up_products_by_category(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
 
@@ -281,9 +281,9 @@ async fn category_products_endpoint_looks_up_products_by_category() {
     assert_eq!(products[0]["sku"], "SKU-A");
 }
 
-#[tokio::test]
-async fn category_products_endpoint_hides_cost_price_from_cashier() {
-    let app = test_app();
+#[sqlx::test]
+async fn category_products_endpoint_hides_cost_price_from_cashier(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (owner_token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
     let create_response = app
@@ -333,9 +333,9 @@ async fn category_products_endpoint_hides_cost_price_from_cashier() {
     assert!(products[0].get("cost_price").is_none());
 }
 
-#[tokio::test]
-async fn deleting_a_category_clears_category_id_but_keeps_the_display_name() {
-    let app = test_app();
+#[sqlx::test]
+async fn deleting_a_category_clears_category_id_but_keeps_the_display_name(pool: sqlx::PgPool) {
+    let app = test_app(pool);
     let (token, _tenant_id) =
         register(&app, "toko-budi", "budi@example.com").await;
 
