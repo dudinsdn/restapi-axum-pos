@@ -117,8 +117,8 @@ impl AuditLogRepository for PgAuditLogRepository {
         // acceptable since `at` is second-precision either way.
         sqlx::query_as::<_, AuditLogRow>(
             "SELECT id, tenant_id, actor, action, resource_type, resource_id, \
-                    label, changes, at \
-             FROM audit_log WHERE tenant_id = $1 ORDER BY at DESC",
+            label, changes, at \
+            FROM audit_log WHERE tenant_id = $1 ORDER BY at DESC, seq DESC",
         )
         .bind(tenant_id)
         .fetch_all(&self.pool)
