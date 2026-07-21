@@ -29,6 +29,8 @@ sqlx = { version = "0.8", features = [
   "macros",
   "json",
 ] }
+dotenvy = "0.15"
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
+ctor = "0.4"

@@ -15,6 +15,11 @@ use restapi_axum_pos::{
     state::AppState, tenants::PgTenantRepository, users::PgUserRepository,
 };
 
+#[ctor::ctor]
+fn init_test_env() {
+    dotenvy::dotenv().ok();
+}
+
 /// Builds the app against a real Postgres test database. The `PgPool` is
 /// injected by `#[sqlx::test]` — one fresh, migrated database per test
 /// function, so tests are fully isolated from each other and (unlike the
