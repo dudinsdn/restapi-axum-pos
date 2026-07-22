@@ -38,7 +38,6 @@ impl From<&AuthUser> for Actor {
     }
 }
 
-#[async_trait::async_trait]
 impl<TR, PR, OR, UR, AR, CR, KR>
     FromRequestParts<Arc<AppState<TR, PR, OR, UR, AR, CR, KR>>> for AuthUser
 where
@@ -111,7 +110,6 @@ impl From<&OwnerUser> for Actor {
     }
 }
 
-#[async_trait::async_trait]
 impl<TR, PR, OR, UR, AR, CR, KR>
     FromRequestParts<Arc<AppState<TR, PR, OR, UR, AR, CR, KR>>> for OwnerUser
 where
@@ -162,7 +160,6 @@ impl From<&ManagerUser> for Actor {
     }
 }
 
-#[async_trait::async_trait]
 impl<TR, PR, OR, UR, AR, CR, KR>
     FromRequestParts<Arc<AppState<TR, PR, OR, UR, AR, CR, KR>>> for ManagerUser
 where

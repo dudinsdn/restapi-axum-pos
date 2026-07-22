@@ -8,7 +8,7 @@ use restapi_axum_pos::{
     customers::PgCustomerRepository,
     orders::PgOrderRepository,
     products::PgProductRepository,
-    state::AppState,
+    state::{AppState, Repositories},
     tenants::PgTenantRepository,
     users::PgUserRepository,
 };
@@ -43,16 +43,17 @@ async fn main() {
         .await
         .expect("failed to run migrations");
 
-    let state = AppState::new(
-        PgTenantRepository::new(pool.clone()),
-        PgProductRepository::new(pool.clone()),
-        PgOrderRepository::new(pool.clone()),
-        PgUserRepository::new(pool.clone()),
-        PgAuditLogRepository::new(pool.clone()),
-        PgCustomerRepository::new(pool.clone()),
-        PgCategoryRepository::new(pool),
-        config.jwt_secret.clone(),
-    );
+    let repos = Repositories {
+        tenants: PgTenantRepository::new(pool.clone()),
+        products: PgProductRepository::new(pool.clone()),
+        orders: PgOrderRepository::new(pool.clone()),
+        users: PgUserRepository::new(pool.clone()),
+        audit: PgAuditLogRepository::new(pool.clone()),
+        customers: PgCustomerRepository::new(pool.clone()),
+        categories: PgCategoryRepository::new(pool),
+    };
+
+    let state = AppState::new(repos, config.jwt_secret.clone());
     let app = create_app(state);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], config.port));

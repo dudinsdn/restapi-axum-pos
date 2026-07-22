@@ -80,7 +80,7 @@ where
             ),
         )
         .route(
-            "/products/:product_id",
+            "/products/{product_id}",
             axum::routing::patch(
                 products::handler::update_product::<TR, PR, OR, UR, AR, CR, KR>,
             )
@@ -92,7 +92,7 @@ where
                 .post(orders::handler::create_order::<TR, PR, OR, UR, AR, CR, KR>),
         )
         .route(
-            "/orders/:order_id",
+            "/orders/{order_id}",
             axum::routing::delete(
                 orders::handler::cancel_order::<TR, PR, OR, UR, AR, CR, KR>,
             ),
@@ -113,7 +113,7 @@ where
                 ),
         )
         .route(
-            "/customers/:customer_id",
+            "/customers/{customer_id}",
             get(customers::handler::get_customer::<TR, PR, OR, UR, AR, CR, KR>)
                 .patch(
                     customers::handler::update_customer::<
@@ -160,7 +160,7 @@ where
             >),
         )
         .route(
-            "/categories/:category_id",
+            "/categories/{category_id}",
             get(categories::handler::get_category::<TR, PR, OR, UR, AR, CR, KR>)
                 .patch(
                     categories::handler::update_category::<
@@ -186,7 +186,7 @@ where
                 ),
         )
         .route(
-            "/categories/:category_id/products",
+            "/categories/{category_id}/products",
             get(categories::handler::list_products_in_category::<
                 TR,
                 PR,

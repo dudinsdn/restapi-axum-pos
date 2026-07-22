@@ -9,33 +9,34 @@ use serde_json::Value;
 use tower::ServiceExt;
 
 use restapi_axum_pos::{
-    app::create_app, audit::PgAuditLogRepository,
-    categories::PgCategoryRepository, customers::PgCustomerRepository,
-    orders::PgOrderRepository, products::PgProductRepository,
-    state::AppState, tenants::PgTenantRepository, users::PgUserRepository,
+    app::create_app,
+    audit::PgAuditLogRepository,
+    categories::PgCategoryRepository,
+    customers::PgCustomerRepository,
+    orders::PgOrderRepository,
+    products::PgProductRepository,
+    state::{AppState, Repositories},
+    tenants::PgTenantRepository,
+    users::PgUserRepository,
 };
 
-#[ctor::ctor]
+#[ctor::ctor(unsafe)]
 fn init_test_env() {
     dotenvy::dotenv().ok();
 }
 
-/// Builds the app against a real Postgres test database. The `PgPool` is
-/// injected by `#[sqlx::test]` — one fresh, migrated database per test
-/// function, so tests are fully isolated from each other and (unlike the
-/// in-memory backend this replaced) actually exercise the same
-/// `Pg*Repository` code that runs in production.
 pub fn test_app(pool: sqlx::PgPool) -> Router {
-    let state = AppState::new(
-        PgTenantRepository::new(pool.clone()),
-        PgProductRepository::new(pool.clone()),
-        PgOrderRepository::new(pool.clone()),
-        PgUserRepository::new(pool.clone()),
-        PgAuditLogRepository::new(pool.clone()),
-        PgCustomerRepository::new(pool.clone()),
-        PgCategoryRepository::new(pool),
-        "test-secret".to_string(),
-    );
+    let repos = Repositories {
+        tenants: PgTenantRepository::new(pool.clone()),
+        products: PgProductRepository::new(pool.clone()),
+        orders: PgOrderRepository::new(pool.clone()),
+        users: PgUserRepository::new(pool.clone()),
+        audit: PgAuditLogRepository::new(pool.clone()),
+        customers: PgCustomerRepository::new(pool.clone()),
+        categories: PgCategoryRepository::new(pool),
+    };
+
+    let state = AppState::new(repos, "test-secret".to_string());
     create_app(state)
 }
 
